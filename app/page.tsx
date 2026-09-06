@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
+import { isLkKine, LK_KINE_PROFILE } from './lk-kine-profile';
 
 type ActionType = 'keyboard' | 'application' | 'ai' | 'agent' | 'macro' | 'system';
 type KeyConfig = {
@@ -21,11 +22,13 @@ type PlateId = 'A' | 'B' | 'C' | 'D';
 type Rotation = 0 | 90 | 180 | 270;
 type ConnectionMode = 'usb' | '2.4g' | 'bluetooth';
 type HardwareConfig = { plate: PlateId; mirrored: boolean; rotation: Rotation; connectionMode: ConnectionMode };
-type DeckConfig = { version: 1; profile: string; layers: Layer[]; macros: Macro[]; hardware?: HardwareConfig; updatedAt: string };
+type ViaProfileRef = { name:string; vendorId:string; productId:string; matrix:{rows:number;cols:number}; auxiliaryKeys:string[]; encoder:string };
+type DeckConfig = { version: 1; profile: string; layers: Layer[]; macros: Macro[]; hardware?: HardwareConfig; via?:ViaProfileRef; updatedAt: string };
 type PhysicalKey = { col: number; row: number; width?: number; height?: number };
 type HidDeviceLike = { productName: string; vendorId: number; productId: number; opened: boolean; open: () => Promise<void>; close?: () => Promise<void> };
 
 const defaultHardware: HardwareConfig = { plate: 'A', mirrored: false, rotation: 90, connectionMode: 'usb' };
+const viaProfile:ViaProfileRef = { name:LK_KINE_PROFILE.name, vendorId:LK_KINE_PROFILE.vendorIdHex, productId:LK_KINE_PROFILE.productIdHex, matrix:{...LK_KINE_PROFILE.matrix}, auxiliaryKeys:[...LK_KINE_PROFILE.auxiliaryKeys], encoder:LK_KINE_PROFILE.encoder };
 
 const singles = (rows: number, cols: number): PhysicalKey[] => Array.from({ length: rows * cols }, (_, index) => ({ col:(index % cols)+1, row:Math.floor(index/cols)+1 }));
 const plateLayouts: Record<PlateId, PhysicalKey[]> = {
@@ -75,6 +78,7 @@ const createDefaultConfig = (): DeckConfig => ({
   version: 1,
   profile: 'Content Studio',
   hardware: defaultHardware,
+  via: viaProfile,
   updatedAt: new Date().toISOString(),
   layers: [
     { id: 'ai', name: 'AI AGENTS', short: 'AI', keys: [
@@ -185,7 +189,7 @@ export default function Home() {
     setConfig(next); setSelectedKeyId(original.keys[0].id); setDraft(original.keys[0]); flash('현재 레이어를 기본값으로 복원했습니다');
   };
   const exportConfig = () => {
-    const blob = new Blob([JSON.stringify({ ...config, updatedAt:new Date().toISOString() }, null, 2)], { type:'application/json' });
+    const blob = new Blob([JSON.stringify({ ...config, via:viaProfile, updatedAt:new Date().toISOString() }, null, 2)], { type:'application/json' });
     const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href=url; anchor.download='kbrain-ai-command-deck.json'; anchor.click(); URL.revokeObjectURL(url); flash('JSON 설정을 내보냈습니다');
   };
   const importConfig = (event: ChangeEvent<HTMLInputElement>) => {
@@ -209,12 +213,12 @@ export default function Home() {
     if (!hid) { setDeviceState('unsupported'); return; }
     setDeviceState('requesting');
     try {
-      const [device] = await hid.requestDevice({ filters:[] });
+      const [device] = await hid.requestDevice({ filters:[{ vendorId:LK_KINE_PROFILE.vendorId, productId:LK_KINE_PROFILE.productId }] });
       if (!device) { setDeviceState('idle'); return; }
       if (!device.opened) await device.open();
       setDeviceInfo({ name:device.productName||'HID Device', vid:`0x${device.vendorId.toString(16).padStart(4,'0')}`, pid:`0x${device.productId.toString(16).padStart(4,'0')}` });
-      setDeviceState('connected');
-      flash('HID 장치 권한과 연결을 확인했습니다');
+      setDeviceState(isLkKine(device.vendorId,device.productId)?'connected':'error');
+      flash(isLkKine(device.vendorId,device.productId)?'LK-KINE VIA 장치 프로필이 일치합니다':'LK-KINE VID/PID와 일치하지 않습니다');
     } catch (error) {
       const name = error instanceof DOMException ? error.name : '';
       setDeviceState(name==='NotFoundError' ? 'idle' : 'error');
@@ -222,7 +226,7 @@ export default function Home() {
   };
   const checkSync = () => {
     if (!deviceInfo) { setShowDevice(true); flash('먼저 USB 또는 동글 HID 장치를 연결하세요'); return; }
-    flash('연결 확인 완료 · VIA 프로토콜 정보가 필요합니다');
+    flash('LK-KINE 프로필 확인 완료 · Raw HID 쓰기는 안전 모드입니다');
   };
 
   return (
@@ -269,20 +273,20 @@ export default function Home() {
           </div>
 
           <div className="device-stage"><div>
-            <div className="device-label"><span>NOVA KINE · PLATE {hardware.plate}</span><small>{hardware.rotation===90||hardware.rotation===270?'LANDSCAPE':'PORTRAIT'} · {hardware.mirrored?'RIGHT MIRROR':'LEFT STANDARD'} · {physicalLayout.cells.length} SWITCHES</small></div>
+            <div className="device-label"><span>NOVA KINE · PLATE {hardware.plate}</span><small>{hardware.rotation===90||hardware.rotation===270?'LANDSCAPE':'PORTRAIT'} · {hardware.mirrored?'RIGHT MIRROR':'LEFT STANDARD'} · {physicalLayout.cells.length} PLATE + 3 AUX + E0</small></div>
             <div className={`device-body rot-${hardware.rotation}`}>
               <div className="key-grid physical-grid" style={{gridTemplateColumns:`repeat(${physicalLayout.columns}, minmax(0,1fr))`,gridTemplateRows:`repeat(${physicalLayout.rows}, minmax(0,1fr))`}}>
                 {physicalLayout.cells.map((cell,index) => { const item=activeLayer.keys[index]; return <button key={`${hardware.plate}-${index}`} style={{gridColumn:`${cell.col} / span ${cell.width}`,gridRow:`${cell.row} / span ${cell.height}`}} aria-label={`${item.label} 키 편집`} className={`deck-key ${selectedKeyId === item.id ? 'selected' : ''} ${item.tone ? 'accent-key' : ''} ${(cell.width??1)>1?'wide-key':''} ${(cell.height??1)>1?'tall-key':''}`} onClick={() => selectKey(item)}><span>{item.glyph}</span><strong>{item.label}</strong><small>{typeLabels[item.kind].toUpperCase()} · {String(index+1).padStart(2,'0')}</small></button>; })}
               </div>
               <div className="device-controls">
-                <button className={activeLayerId==='ai'?'active':''} onClick={() => switchLayer('ai')}><span>AI</span><small>MODE</small></button>
-                <button className={activeLayerId==='dev'?'active':''} onClick={() => switchLayer('dev')}><span>DEV</span><small>MODE</small></button>
-                <button className={activeLayerId==='design'?'active':''} onClick={() => switchLayer('design')}><span>DES</span><small>MODE</small></button>
-                <button className="roller" onClick={() => flash('롤러: 이전/다음 에이전트 · 회전 입력')}><span /><small>AGENT SELECT</small></button>
+                <button className={activeLayerId==='ai'?'active':''} onClick={() => switchLayer('ai')}><span>AI</span><small>M[4,9]</small></button>
+                <button className={activeLayerId==='dev'?'active':''} onClick={() => switchLayer('dev')}><span>DEV</span><small>M[4,10]</small></button>
+                <button className={activeLayerId==='design'?'active':''} onClick={() => switchLayer('design')}><span>DES</span><small>M[4,11]</small></button>
+                <button className="roller" onClick={() => flash('엔코더 e0 · 회전 입력을 VIA에서 테스트하세요')}><span /><small>ENCODER E0</small></button>
               </div>
             </div>
           </div></div>
-          <footer className="status-strip"><span><i className={deviceState==='connected'?'live':''} /> {deviceState==='connected'?'HID 연결됨':'오프라인 설계 모드'}</span><span>{physicalLayout.cells.length} 물리 키 · {activeLayer.keys.filter(item => item.action).length} 액션</span><span>Plate {hardware.plate} · {hardware.rotation}°</span><button onClick={checkSync}>{deviceInfo?'동기화 확인':'장치 연결'} ↗</button></footer>
+          <footer className="status-strip"><span><i className={deviceState==='connected'?'live':''} /> {deviceState==='connected'?'LK-KINE 프로필 일치':'오프라인 설계 모드'}</span><span>{physicalLayout.cells.length} PLATE · 3 AUX · E0</span><span>Matrix 5×12 · Plate {hardware.plate} · {hardware.rotation}°</span><button onClick={checkSync}>{deviceInfo?'동기화 확인':'장치 연결'} ↗</button></footer>
         </section>
 
         <aside className="inspector">
@@ -304,7 +308,8 @@ export default function Home() {
       {showDevice && <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowDevice(false)}>
         <section className="device-modal" role="dialog" aria-modal="true" aria-labelledby="device-title" onMouseDown={event => event.stopPropagation()}>
           <header><div><p className="eyebrow">DEVICE & SYNC</p><h2 id="device-title">NOVA KINE 연결</h2></div><button aria-label="닫기" onClick={() => setShowDevice(false)}>×</button></header>
-          <p className="modal-copy">타이핑용 페어링과 키맵 동기화는 별개입니다. 키맵을 쓰려면 VIA 호환 Raw HID 인터페이스가 보여야 하므로 첫 연결은 USB-C 유선 모드를 권장합니다.</p>
+          <p className="modal-copy">타이핑용 페어링과 키맵 동기화는 별개입니다. 첨부된 VIA 정의에 따라 <b>LK-KINE · VID {LK_KINE_PROFILE.vendorIdHex} · PID {LK_KINE_PROFILE.productIdHex}</b> 장치만 찾으며, 첫 설정은 USB-C 유선 모드를 권장합니다.</p>
+          <div className="via-device-profile"><span>VIA DEVICE</span><b>{LK_KINE_PROFILE.name}</b><code>{LK_KINE_PROFILE.vendorIdHex}:{LK_KINE_PROFILE.productIdHex}</code><em>{LK_KINE_PROFILE.matrix.rows}×{LK_KINE_PROFILE.matrix.cols} MATRIX</em></div>
           <div className="transport-grid">
             {([
               ['usb','USB-C','동기화 권장','케이블 연결 · Wired 모드'],
@@ -316,16 +321,16 @@ export default function Home() {
             <span className="device-pulse" />
             <div>
               <strong>{deviceState==='connected' ? deviceInfo?.name : deviceState==='requesting' ? '장치를 선택하세요' : deviceState==='unsupported' ? 'WebHID 미지원 브라우저' : deviceState==='error' ? '장치를 열 수 없습니다' : '연결된 설정 장치 없음'}</strong>
-              <small>{deviceInfo ? `VID ${deviceInfo.vid} · PID ${deviceInfo.pid}` : 'Chrome 또는 Edge에서 USB-C 연결 후 장치 찾기를 누르세요.'}</small>
+              <small>{deviceInfo ? `VID ${deviceInfo.vid.toUpperCase()} · PID ${deviceInfo.pid.toUpperCase()} · ${deviceState==='connected'?'VIA 프로필 일치':'프로필 불일치'}` : 'Chrome 또는 Edge에서 USB-C 연결 후 장치 찾기를 누르세요.'}</small>
             </div>
             <button onClick={connectHid} disabled={deviceState==='requesting'}>{deviceState==='requesting'?'대기 중':'장치 찾기'}</button>
           </div>
           <ol className="sync-steps">
             <li className={deviceInfo?'done':'active'}><b>01</b><div><strong>OS 연결</strong><small>USB-C, 2.4G 동글 또는 Bluetooth 페어링</small></div></li>
             <li className={deviceInfo?'active':''}><b>02</b><div><strong>WebHID 권한</strong><small>브라우저에서 NOVA KINE Raw HID 선택</small></div></li>
-            <li><b>03</b><div><strong>VIA 프로토콜 확인</strong><small>제조사 VID/PID와 VIA JSON 확보 후 쓰기 활성화</small></div></li>
+            <li className={deviceInfo?'done':''}><b>03</b><div><strong>VIA 프로필 확인</strong><small>LK-KINE · 5×12 matrix · encoder e0</small></div></li>
           </ol>
-          <aside className="protocol-note"><strong>현재 안전 모드</strong><p>장치 검색·권한·VID/PID 진단까지 구현되어 있습니다. 제조사가 NOVA KINE용 VIA JSON 또는 프로토콜을 공개하기 전에는 임의 HID 보고서를 보내지 않습니다.</p></aside>
+          <aside className="protocol-note"><strong>VIA JSON 반영 · 안전 모드</strong><p>장치 식별자, 매트릭스, 사용자 키코드와 조명 옵션을 적용했습니다. 키맵 쓰기는 VIA Raw HID 명령 규격과 실제 장치 응답까지 검증한 뒤 활성화해야 하므로 현재는 임의 HID 보고서를 전송하지 않습니다.</p></aside>
           <footer><span>{deviceInfo?'HID transport ready':'Configuration stays local'}</span><button onClick={checkSync} disabled={!deviceInfo}>키맵 동기화 준비 확인</button></footer>
         </section>
       </div>}

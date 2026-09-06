@@ -1,0 +1,38 @@
+export const LK_KINE_PROFILE = {
+  name: 'LK-KINE',
+  vendorId: 0x36b0,
+  productId: 0x3124,
+  vendorIdHex: '0x36B0',
+  productIdHex: '0x3124',
+  matrix: { rows:5, cols:12 },
+  auxiliaryKeys: ['4,9','4,10','4,11'],
+  encoder: 'e0',
+  customKeycodes: [
+    ['MD_24G','2.4G','2.4GHz 작동 모드'],
+    ['MD_BLE1','BLE1','Bluetooth 채널 1'],
+    ['MD_BLE2','BLE2','Bluetooth 채널 2'],
+    ['MD_BLE3','BLE3','Bluetooth 채널 3'],
+    ['MD_USB','USB','USB 작동 모드'],
+    ['U_EE_CLR','RESET','사용자 설정 초기화'],
+    ['QK_BAT','BAT','배터리 상태 확인'],
+    ['QMK_SLEEP','SLEEP','키보드 절전'],
+    ['LG_TOG','LG_TOG','로고 조명 켜기/끄기'],
+    ['LG_MOD','LG_MO','조명 모드 순방향 전환'],
+    ['LG_RMOD','LG_RM','조명 모드 역방향 전환'],
+    ['LG_HUI','LG_HUI','색조 증가'],
+    ['LG_HUD','LG_HUD','색조 감소'],
+    ['LG_SAI','LG_SAI','채도 증가'],
+    ['LG_SAD','LG_SAD','채도 감소'],
+    ['LG_VAI','LG_VAI','밝기 증가'],
+    ['LG_VAD','LG_VAD','밝기 감소'],
+    ['LG_SPI','LG_SPI','효과 속도 증가'],
+    ['LG_SPD','LG_SPD','효과 속도 감소'],
+  ] as const,
+  lighting: {
+    brightness:[0,200] as const,
+    speed:[0,4] as const,
+    effects:['none','wave','fixed wave','spectrum','breathe','light','shutdown'] as const,
+  },
+} as const;
+
+export const isLkKine = (vendorId:number,productId:number) => vendorId===LK_KINE_PROFILE.vendorId && productId===LK_KINE_PROFILE.productId;

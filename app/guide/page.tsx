@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { HardwareMap, HeroDevice, PairingCoach, PlateExplorer } from './guide-experience';
+import { LK_KINE_PROFILE } from '../lk-kine-profile';
 import './guide.css';
 
 export const metadata: Metadata = {
@@ -47,7 +48,7 @@ export default function GuidePage() {
 
         <article className="guide-content">
           <section id="device" className="guide-section">
-            <div className="section-number">01</div><div className="section-copy"><p className="guide-eyebrow">HARDWARE MAP</p><h2>장치를 한눈에 보기</h2><p>설명서의 기본 숫자패드 도면을 그대로 읽을 수 있게 재구성했습니다. 핵심은 오른쪽 위 <kbd>Home</kbd> 키입니다. 짧게 누르면 Home, 길게 누른 상태에서는 Fn으로 동작합니다.</p><HardwareMap/><aside className="diagram-note"><b>도면 읽는 법</b><p>상단 4키와 숫자패드는 VIA에서 직접 키값을 바꿀 수 있습니다. 오른쪽 보조키와 롤러도 Key Tester의 Test Matrix에서 반드시 함께 반응을 확인하세요.</p></aside></div>
+            <div className="section-number">01</div><div className="section-copy"><p className="guide-eyebrow">HARDWARE MAP</p><h2>장치를 한눈에 보기</h2><p>설명서의 기본 숫자패드 도면을 그대로 읽을 수 있게 재구성했습니다. 핵심은 오른쪽 위 <kbd>Home</kbd> 키입니다. 짧게 누르면 Home, 길게 누른 상태에서는 Fn으로 동작합니다.</p><HardwareMap/><aside className="diagram-note"><b>VIA JSON에서 확인한 입력 구조</b><p>메인 플레이트 외에 오른쪽 보조키 3개는 matrix <code>4,9</code> · <code>4,10</code> · <code>4,11</code>, 롤러는 encoder <code>e0</code>입니다. Key Tester에서 네 입력을 모두 확인하세요.</p></aside></div>
           </section>
 
           <section id="start" className="guide-section">
@@ -81,9 +82,11 @@ export default function GuidePage() {
 
           <section id="via" className="guide-section">
             <div className="section-number">05</div><div className="section-copy"><p className="guide-eyebrow">VIA CONFIGURATION</p><h2>VIA 키맵 설정</h2><div className="via-flow"><span>JSON 다운로드</span><i>→</i><span>Design에서 로드</span><i>→</i><span>Test Matrix</span><i>→</i><span>Configure</span></div>
+              <div className="via-profile-panel"><div className="via-profile-head"><div><p>DEVICE DEFINITION</p><h3>{LK_KINE_PROFILE.name}</h3></div><div><span>VID <b>{LK_KINE_PROFILE.vendorIdHex}</b></span><span>PID <b>{LK_KINE_PROFILE.productIdHex}</b></span><span>MATRIX <b>{LK_KINE_PROFILE.matrix.rows}×{LK_KINE_PROFILE.matrix.cols}</b></span><span>ENCODER <b>{LK_KINE_PROFILE.encoder}</b></span></div></div><div className="via-keycodes">{LK_KINE_PROFILE.customKeycodes.slice(0,8).map(([code,label,copy])=><span key={code}><code>{code}</code><b>{label}</b><small>{copy}</small></span>)}</div></div>
               <h3>일반 키 변경</h3><p>VIA 왼쪽의 Configure에서 변경할 키를 선택하고 아래 키 목록에서 새 키값을 선택합니다. 설정 전 Key Tester에서 실제 스위치 위치가 화면 배열과 맞는지 먼저 확인하세요.</p>
               <h3>오른쪽 위 Home/Fn 키 변경</h3><p>이 키는 레이어 탭 기능이 포함된 <code>LT(2,KC_HOME)</code>입니다. 전체 코드를 일반 키로 바꾸면 Fn 조합이 사라집니다. 짧게 누르는 기능만 Enter로 바꾸려면 Any에서 두 번째 값만 바꿔 <code>LT(2,KC_ENT)</code>처럼 유지합니다.</p>
-              <h3>표시등 색상</h3><p>유선 모드에서 Configure → Lighting으로 이동하고 Effect를 <code>light</code>로 선택한 뒤 Color에서 원하는 색상을 지정합니다.</p>
+              <h3>로고 표시등 세부 설정</h3><p>유선 모드에서 Configure → Lighting → logo로 이동합니다. 밝기는 <code>0-200</code>, 효과 속도는 <code>0-4</code>이며, Effect는 <code>none</code> · <code>wave</code> · <code>fixed wave</code> · <code>spectrum</code> · <code>breathe</code> · <code>light</code> · <code>shutdown</code>을 지원합니다. 단색은 <code>light</code>를 선택한 뒤 Color에서 지정하세요.</p>
+              <h3>무선·배터리·절전 키코드</h3><p>VIA의 Custom 항목에는 <code>MD_BLE1/2/3</code>, <code>MD_24G</code>, <code>MD_USB</code>, <code>QK_BAT</code>, <code>QMK_SLEEP</code>가 정의돼 있습니다. Fn 레이어에서 해당 코드를 교체할 때는 먼저 현재 키맵을 백업하세요.</p>
               <div className="resource-row"><a href="https://www.usevia.app/" target="_blank" rel="noreferrer">VIA 실행 ↗</a><a href="https://cloud.luminkey.cn/" target="_blank" rel="noreferrer">LUMINKEY 자료실 ↗</a><a href="https://docs.qmk.fm/keycodes" target="_blank" rel="noreferrer">QMK 키코드 ↗</a></div>
             </div>
           </section>
