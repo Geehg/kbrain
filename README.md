@@ -44,6 +44,15 @@ npm run build
 
 GitHub Actions는 push 및 pull request마다 lint와 production build를 자동 검사합니다.
 
+## Docker deployment
+
+SynoDockPilot 같은 Docker 관리 도구에서는 저장소 ZIP을 `Node.js 앱`으로 가져오면 됩니다. 컨테이너 내부 포트는 `3000`이며, 외부 포트는 관리 도구에서 비어 있는 포트로 연결합니다.
+
+```bash
+docker build -t kbrain-ai-command-deck .
+docker run --rm -p 8500:3000 kbrain-ai-command-deck
+```
+
 ## Project structure
 
 ```text
