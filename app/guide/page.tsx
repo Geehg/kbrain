@@ -27,7 +27,7 @@ export default function GuidePage() {
     <main className="guide-shell">
       <header className="guide-topbar">
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-        <a className="guide-brand" href="/"><span>K</span><div><strong>KBRAIN</strong><small>AI COMMAND DECK</small></div></a>
+        <a className="guide-brand" href="/"><strong>AI PAD</strong></a>
         <nav>
           {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a href="/">Configurator</a>

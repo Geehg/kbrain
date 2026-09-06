@@ -230,7 +230,7 @@ export default function Home() {
       {toast && <div className="toast" role="status">✓ {toast}</div>}
       <input ref={importRef} type="file" accept="application/json" hidden onChange={importConfig} />
       <header className="topbar">
-        <div className="brand-lockup"><span className="brand-mark">K</span><div><strong>KBRAIN</strong><span>AI COMMAND DECK</span></div></div>
+        <div className="brand-lockup"><strong>AI PAD</strong></div>
         <nav className="top-actions" aria-label="프로젝트 작업">
             <a className="guide-link" href="/guide">사용 가이드</a>
           <button className={`connection-button ${deviceState==='connected'?'connected':''}`} onClick={() => setShowDevice(true)}><i /> {deviceInfo ? deviceInfo.name : '장치 연결'}</button>
