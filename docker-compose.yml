@@ -1,0 +1,8 @@
+services:
+  app:
+    build: .
+    container_name: kbrain-ai-command-deck-app
+    restart: unless-stopped
+    network_mode: bridge
+    ports:
+      - "8500:3000"
