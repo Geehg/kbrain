@@ -5,6 +5,8 @@ dist
 .wrangler
 .git
 .github
+docker-compose.yml
+README.md
 .env*
 outputs
 work

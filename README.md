@@ -52,7 +52,7 @@ SynoDockPilot 같은 Docker 관리 도구에서는 저장소 ZIP을 `Node.js 앱
 
 ```bash
 docker build -t kbrain-ai-command-deck .
-docker run --rm -p 8501:3000 kbrain-ai-command-deck
+docker run --rm -p 8599:3000 kbrain-ai-command-deck
 ```
 
 ## Project structure
