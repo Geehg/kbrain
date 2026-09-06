@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import './guide.css';
 
 export const metadata: Metadata = {
@@ -27,8 +26,13 @@ export default function GuidePage() {
   return (
     <main className="guide-shell">
       <header className="guide-topbar">
-        <Link className="guide-brand" href="/"><span>K</span><div><strong>KBRAIN</strong><small>AI COMMAND DECK</small></div></Link>
-        <nav><Link href="/">Configurator</Link><Link className="active" href="/guide">사용 가이드</Link></nav>
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+        <a className="guide-brand" href="/"><span>K</span><div><strong>KBRAIN</strong><small>AI COMMAND DECK</small></div></a>
+        <nav>
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+          <a href="/">Configurator</a>
+          <a className="active" href="/guide">사용 가이드</a>
+        </nav>
         <div className="language-switch" aria-label="언어"><button className="active">KO</button><button disabled title="추후 제공 예정">EN · SOON</button></div>
       </header>
 
@@ -85,7 +89,10 @@ export default function GuidePage() {
           <section id="layout" className="guide-section">
             <div className="section-number">05</div><div className="section-copy"><p className="guide-eyebrow">LAYOUT</p><h2>플레이트와 방향</h2><p>Plate A/B/C는 2U 키 위치가 다른 21키 배열이며 좌우 미러가 가능합니다. Plate D는 24개의 1U 키를 사용하는 직교 배열입니다.</p><div className="plate-cards">
               {[['A','세로 2U 2개 + 하단 가로 2U'],['B','좌측 세로 2U + 하단 가로 2U 2개'],['C','상단 가로 2U 2개 + 세로 2U'],['D','24키 직교 배열']].map(([plate,copy])=><article key={plate}><b>PLATE {plate}</b><div className={`plate-mini plate-${plate.toLowerCase()}`}>{Array.from({length:plate==='D'?24:21},(_,index)=><i key={index}/>)}</div><p>{copy}</p></article>)}
-            </div><Link className="config-cta" href="/">Configurator에서 배열·미러·회전 설정하기 →</Link></div>
+            </div>
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+            <a className="config-cta" href="/">Configurator에서 배열·미러·회전 설정하기 →</a>
+          </div>
           </section>
 
           <section id="firmware" className="guide-section">
