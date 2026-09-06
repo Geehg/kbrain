@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 
@@ -232,6 +233,7 @@ export default function Home() {
       <header className="topbar">
         <div className="brand-lockup"><span className="brand-mark">K</span><div><strong>KBRAIN</strong><span>AI COMMAND DECK</span></div></div>
         <nav className="top-actions" aria-label="프로젝트 작업">
+            <Link className="guide-link" href="/guide">사용 가이드</Link>
           <button className={`connection-button ${deviceState==='connected'?'connected':''}`} onClick={() => setShowDevice(true)}><i /> {deviceInfo ? deviceInfo.name : '장치 연결'}</button>
           <button className="ghost-button" onClick={() => importRef.current?.click()}>불러오기</button>
           <button className="primary-button" onClick={exportConfig}>설정 내보내기</button>

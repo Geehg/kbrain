@@ -17,6 +17,8 @@ NOVA KINE을 단순 매크로패드가 아닌 Codex, Claude Code, 콘텐츠 제�
 - Plate A/B/C/D의 실제 4×6 유닛 배열과 1U·2U 키 조합
 - Plate A/B/C 좌우 미러 및 0°/90°/180°/270° 작업 방향
 - USB-C/2.4GHz/Bluetooth 전송 모드와 WebHID 연결 진단
+- `/guide` 한국어 온라인 사용 가이드: 빠른 시작, 연결, 조합키, VIA, 배열, 펌웨어, 구성품
+- 향후 영문 카피를 같은 정보 구조에 추가할 수 있는 언어 전환 UI
 
 ## Architecture boundary
 
