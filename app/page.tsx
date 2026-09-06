@@ -17,7 +17,55 @@ type KeyConfig = {
 };
 type Layer = { id: string; name: string; short: string; keys: KeyConfig[] };
 type Macro = { id: string; name: string; steps: string[] };
-type DeckConfig = { version: 1; profile: string; layers: Layer[]; macros: Macro[]; updatedAt: string };
+type PlateId = 'A' | 'B' | 'C' | 'D';
+type Rotation = 0 | 90 | 180 | 270;
+type ConnectionMode = 'usb' | '2.4g' | 'bluetooth';
+type HardwareConfig = { plate: PlateId; mirrored: boolean; rotation: Rotation; connectionMode: ConnectionMode };
+type DeckConfig = { version: 1; profile: string; layers: Layer[]; macros: Macro[]; hardware?: HardwareConfig; updatedAt: string };
+type PhysicalKey = { col: number; row: number; width?: number; height?: number };
+type HidDeviceLike = { productName: string; vendorId: number; productId: number; opened: boolean; open: () => Promise<void>; close?: () => Promise<void> };
+
+const defaultHardware: HardwareConfig = { plate: 'A', mirrored: false, rotation: 90, connectionMode: 'usb' };
+
+const singles = (rows: number, cols: number): PhysicalKey[] => Array.from({ length: rows * cols }, (_, index) => ({ col:(index % cols)+1, row:Math.floor(index/cols)+1 }));
+const plateLayouts: Record<PlateId, PhysicalKey[]> = {
+  A: [
+    ...singles(2,4),
+    {col:1,row:3},{col:2,row:3},{col:3,row:3},{col:4,row:3,height:2},
+    {col:1,row:4},{col:2,row:4},{col:3,row:4},
+    {col:1,row:5},{col:2,row:5},{col:3,row:5},{col:4,row:5,height:2},
+    {col:1,row:6,width:2},{col:3,row:6},
+  ],
+  B: [
+    ...singles(2,4),
+    {col:1,row:3,height:2},{col:2,row:3},{col:3,row:3},{col:4,row:3},
+    {col:2,row:4},{col:3,row:4},{col:4,row:4},
+    {col:1,row:5},{col:2,row:5},{col:3,row:5},{col:4,row:5},
+    {col:1,row:6,width:2},{col:3,row:6,width:2},
+  ],
+  C: [
+    ...singles(1,4),
+    {col:1,row:2,width:2},{col:3,row:2,width:2},
+    {col:1,row:3},{col:2,row:3},{col:3,row:3},{col:4,row:3,height:2},
+    {col:1,row:4},{col:2,row:4},{col:3,row:4},
+    ...Array.from({length:8},(_,index)=>({col:(index%4)+1,row:Math.floor(index/4)+5})),
+  ],
+  D: singles(6,4),
+};
+
+const transformLayout = (plate: PlateId, mirrored: boolean, rotation: Rotation) => {
+  const base = plateLayouts[plate].map(cell => {
+    const width=cell.width??1; const height=cell.height??1;
+    return { ...cell, width, height, col:mirrored ? 6-cell.col-width : cell.col };
+  });
+  const cells = base.map(cell => {
+    if (rotation===90) return { col:8-cell.row-cell.height, row:cell.col, width:cell.height, height:cell.width };
+    if (rotation===180) return { col:6-cell.col-cell.width, row:8-cell.row-cell.height, width:cell.width, height:cell.height };
+    if (rotation===270) return { col:cell.row, row:6-cell.col-cell.width, width:cell.height, height:cell.width };
+    return cell;
+  });
+  return { cells, columns:rotation===90||rotation===270 ? 6 : 4, rows:rotation===90||rotation===270 ? 4 : 6 };
+};
 
 const key = (id: string, label: string, kind: ActionType, action: string, prompt = '', tone?: KeyConfig['tone']): KeyConfig => ({
   id, label, glyph: label.slice(0, 2).toUpperCase(), kind, action, prompt, confirm: ['APPROVE', 'STOP', 'DEPLOY', 'MERGE'].includes(label), hud: kind === 'ai' || kind === 'agent', tone,
@@ -26,6 +74,7 @@ const key = (id: string, label: string, kind: ActionType, action: string, prompt
 const createDefaultConfig = (): DeckConfig => ({
   version: 1,
   profile: 'Content Studio',
+  hardware: defaultHardware,
   updatedAt: new Date().toISOString(),
   layers: [
     { id: 'ai', name: 'AI AGENTS', short: 'AI', keys: [
@@ -94,6 +143,9 @@ export default function Home() {
   const [toast, setToast] = useState('');
   const [showProfiles, setShowProfiles] = useState(false);
   const [showMacro, setShowMacro] = useState(false);
+  const [showDevice, setShowDevice] = useState(false);
+  const [deviceState, setDeviceState] = useState<'idle'|'requesting'|'connected'|'unsupported'|'error'>('idle');
+  const [deviceInfo, setDeviceInfo] = useState<{name:string;vid:string;pid:string}|null>(null);
   const [macroSteps, setMacroSteps] = useState<string[]>(['현재 파일 저장','선택한 에이전트 실행','결과를 HUD에 표시']);
   const [newStep, setNewStep] = useState('');
   const importRef = useRef<HTMLInputElement>(null);
@@ -114,6 +166,8 @@ export default function Home() {
 
   const activeLayer = useMemo(() => config.layers.find(layer => layer.id === activeLayerId) ?? config.layers[0], [config, activeLayerId]);
   const selectedIndex = activeLayer.keys.findIndex(item => item.id === selectedKeyId);
+  const hardware = config.hardware ?? defaultHardware;
+  const physicalLayout = useMemo(() => transformLayout(hardware.plate, hardware.mirrored, hardware.rotation), [hardware]);
 
   const flash = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 2200); };
   const switchLayer = (id: string) => {
@@ -142,6 +196,34 @@ export default function Home() {
   };
   const selectProfile = (name: string) => { setConfig(prev => ({ ...prev, profile:name })); setShowProfiles(false); flash(`${name} 프로필로 전환했습니다`); };
   const addMacroStep = () => { if (!newStep.trim()) return; setMacroSteps(prev => [...prev, newStep.trim()]); setNewStep(''); };
+  const updateHardware = (patch: Partial<HardwareConfig>) => {
+    setConfig(prev => {
+      const next = { ...prev, hardware:{ ...(prev.hardware??defaultHardware), ...patch }, updatedAt:new Date().toISOString() };
+      localStorage.setItem('kbrain-command-deck-v1', JSON.stringify(next));
+      return next;
+    });
+    setSelectedKeyId(activeLayer.keys[0].id); setDraft(activeLayer.keys[0]);
+  };
+  const connectHid = async () => {
+    const hid = (navigator as Navigator & { hid?: { requestDevice:(options:{filters:object[]})=>Promise<HidDeviceLike[]> } }).hid;
+    if (!hid) { setDeviceState('unsupported'); return; }
+    setDeviceState('requesting');
+    try {
+      const [device] = await hid.requestDevice({ filters:[] });
+      if (!device) { setDeviceState('idle'); return; }
+      if (!device.opened) await device.open();
+      setDeviceInfo({ name:device.productName||'HID Device', vid:`0x${device.vendorId.toString(16).padStart(4,'0')}`, pid:`0x${device.productId.toString(16).padStart(4,'0')}` });
+      setDeviceState('connected');
+      flash('HID 장치 권한과 연결을 확인했습니다');
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : '';
+      setDeviceState(name==='NotFoundError' ? 'idle' : 'error');
+    }
+  };
+  const checkSync = () => {
+    if (!deviceInfo) { setShowDevice(true); flash('먼저 USB 또는 동글 HID 장치를 연결하세요'); return; }
+    flash('연결 확인 완료 · VIA 프로토콜 정보가 필요합니다');
+  };
 
   return (
     <main className="app-shell">
@@ -150,7 +232,7 @@ export default function Home() {
       <header className="topbar">
         <div className="brand-lockup"><span className="brand-mark">K</span><div><strong>KBRAIN</strong><span>AI COMMAND DECK</span></div></div>
         <nav className="top-actions" aria-label="프로젝트 작업">
-          <span className="connection"><i /> LOCAL CONFIG MODE</span>
+          <button className={`connection-button ${deviceState==='connected'?'connected':''}`} onClick={() => setShowDevice(true)}><i /> {deviceInfo ? deviceInfo.name : '장치 연결'}</button>
           <button className="ghost-button" onClick={() => importRef.current?.click()}>불러오기</button>
           <button className="primary-button" onClick={exportConfig}>설정 내보내기</button>
         </nav>
@@ -179,11 +261,17 @@ export default function Home() {
             <div className="history-actions"><button aria-label="이전 키" onClick={() => selectKey(activeLayer.keys[(selectedIndex+23)%24])}>←</button><button aria-label="다음 키" onClick={() => selectKey(activeLayer.keys[(selectedIndex+1)%24])}>→</button><button onClick={resetLayer}>초기화</button></div>
           </div>
 
+          <div className="hardware-toolbar" aria-label="물리 배열 설정">
+            <div className="hardware-group"><span>PLATE</span>{(['A','B','C','D'] as PlateId[]).map(plate => <button key={plate} className={hardware.plate===plate?'active':''} onClick={() => updateHardware({plate})}>{plate}</button>)}</div>
+            <div className="hardware-group"><span>MIRROR</span><button className={!hardware.mirrored?'active':''} onClick={() => updateHardware({mirrored:false})}>LEFT</button><button className={hardware.mirrored?'active':''} onClick={() => updateHardware({mirrored:true})}>RIGHT</button></div>
+            <div className="hardware-group"><span>ROTATE</span>{([0,90,180,270] as Rotation[]).map(rotation => <button key={rotation} className={hardware.rotation===rotation?'active':''} onClick={() => updateHardware({rotation})}>{rotation}°</button>)}</div>
+          </div>
+
           <div className="device-stage"><div>
-            <div className="device-label"><span>NOVA KINE</span><small>24 KEY CONTROL SURFACE</small></div>
-            <div className="device-body">
-              <div className="key-grid">
-                {activeLayer.keys.map((item,index) => <button key={item.id} aria-label={`${item.label} 키 편집`} className={`deck-key ${selectedKeyId === item.id ? 'selected' : ''} ${item.tone ? 'accent-key' : ''}`} onClick={() => selectKey(item)}><span>{item.glyph}</span><strong>{item.label}</strong><small>{typeLabels[item.kind].toUpperCase()} · {String(index+1).padStart(2,'0')}</small></button>)}
+            <div className="device-label"><span>NOVA KINE · PLATE {hardware.plate}</span><small>{hardware.rotation===90||hardware.rotation===270?'LANDSCAPE':'PORTRAIT'} · {hardware.mirrored?'RIGHT MIRROR':'LEFT STANDARD'} · {physicalLayout.cells.length} SWITCHES</small></div>
+            <div className={`device-body rot-${hardware.rotation}`}>
+              <div className="key-grid physical-grid" style={{gridTemplateColumns:`repeat(${physicalLayout.columns}, minmax(0,1fr))`,gridTemplateRows:`repeat(${physicalLayout.rows}, minmax(0,1fr))`}}>
+                {physicalLayout.cells.map((cell,index) => { const item=activeLayer.keys[index]; return <button key={`${hardware.plate}-${index}`} style={{gridColumn:`${cell.col} / span ${cell.width}`,gridRow:`${cell.row} / span ${cell.height}`}} aria-label={`${item.label} 키 편집`} className={`deck-key ${selectedKeyId === item.id ? 'selected' : ''} ${item.tone ? 'accent-key' : ''} ${(cell.width??1)>1?'wide-key':''} ${(cell.height??1)>1?'tall-key':''}`} onClick={() => selectKey(item)}><span>{item.glyph}</span><strong>{item.label}</strong><small>{typeLabels[item.kind].toUpperCase()} · {String(index+1).padStart(2,'0')}</small></button>; })}
               </div>
               <div className="device-controls">
                 <button className={activeLayerId==='ai'?'active':''} onClick={() => switchLayer('ai')}><span>AI</span><small>MODE</small></button>
@@ -193,7 +281,7 @@ export default function Home() {
               </div>
             </div>
           </div></div>
-          <footer className="status-strip"><span><i /> 로컬 설정 모드</span><span>{activeLayer.keys.filter(item => item.action).length} / 24 키 할당</span><span>자동 저장 활성</span><button onClick={() => setShowMacro(true)}>매크로 편집기 열기 ↗</button></footer>
+          <footer className="status-strip"><span><i className={deviceState==='connected'?'live':''} /> {deviceState==='connected'?'HID 연결됨':'오프라인 설계 모드'}</span><span>{physicalLayout.cells.length} 물리 키 · {activeLayer.keys.filter(item => item.action).length} 액션</span><span>Plate {hardware.plate} · {hardware.rotation}°</span><button onClick={checkSync}>{deviceInfo?'동기화 확인':'장치 연결'} ↗</button></footer>
         </section>
 
         <aside className="inspector">
@@ -211,6 +299,35 @@ export default function Home() {
           <button className="save-button" onClick={saveDraft}>키 설정 저장</button>
         </aside>
       </section>
+
+      {showDevice && <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowDevice(false)}>
+        <section className="device-modal" role="dialog" aria-modal="true" aria-labelledby="device-title" onMouseDown={event => event.stopPropagation()}>
+          <header><div><p className="eyebrow">DEVICE & SYNC</p><h2 id="device-title">NOVA KINE 연결</h2></div><button aria-label="닫기" onClick={() => setShowDevice(false)}>×</button></header>
+          <p className="modal-copy">타이핑용 페어링과 키맵 동기화는 별개입니다. 키맵을 쓰려면 VIA 호환 Raw HID 인터페이스가 보여야 하므로 첫 연결은 USB-C 유선 모드를 권장합니다.</p>
+          <div className="transport-grid">
+            {([
+              ['usb','USB-C','동기화 권장','케이블 연결 · Wired 모드'],
+              ['2.4g','2.4 GHz','입력 + 진단','동글 연결 후 HID 확인'],
+              ['bluetooth','Bluetooth','입력 중심','macOS에서 먼저 페어링'],
+            ] as [ConnectionMode,string,string,string][]).map(([mode,title,badge,copy]) => <button key={mode} className={hardware.connectionMode===mode?'active':''} onClick={() => updateHardware({connectionMode:mode})}><b>{title}</b><em>{badge}</em><span>{copy}</span></button>)}
+          </div>
+          <div className={`device-state-card ${deviceState}`}>
+            <span className="device-pulse" />
+            <div>
+              <strong>{deviceState==='connected' ? deviceInfo?.name : deviceState==='requesting' ? '장치를 선택하세요' : deviceState==='unsupported' ? 'WebHID 미지원 브라우저' : deviceState==='error' ? '장치를 열 수 없습니다' : '연결된 설정 장치 없음'}</strong>
+              <small>{deviceInfo ? `VID ${deviceInfo.vid} · PID ${deviceInfo.pid}` : 'Chrome 또는 Edge에서 USB-C 연결 후 장치 찾기를 누르세요.'}</small>
+            </div>
+            <button onClick={connectHid} disabled={deviceState==='requesting'}>{deviceState==='requesting'?'대기 중':'장치 찾기'}</button>
+          </div>
+          <ol className="sync-steps">
+            <li className={deviceInfo?'done':'active'}><b>01</b><div><strong>OS 연결</strong><small>USB-C, 2.4G 동글 또는 Bluetooth 페어링</small></div></li>
+            <li className={deviceInfo?'active':''}><b>02</b><div><strong>WebHID 권한</strong><small>브라우저에서 NOVA KINE Raw HID 선택</small></div></li>
+            <li><b>03</b><div><strong>VIA 프로토콜 확인</strong><small>제조사 VID/PID와 VIA JSON 확보 후 쓰기 활성화</small></div></li>
+          </ol>
+          <aside className="protocol-note"><strong>현재 안전 모드</strong><p>장치 검색·권한·VID/PID 진단까지 구현되어 있습니다. 제조사가 NOVA KINE용 VIA JSON 또는 프로토콜을 공개하기 전에는 임의 HID 보고서를 보내지 않습니다.</p></aside>
+          <footer><span>{deviceInfo?'HID transport ready':'Configuration stays local'}</span><button onClick={checkSync} disabled={!deviceInfo}>키맵 동기화 준비 확인</button></footer>
+        </section>
+      </div>}
 
       {showMacro && <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowMacro(false)}>
         <section className="macro-modal" role="dialog" aria-modal="true" aria-labelledby="macro-title" onMouseDown={e => e.stopPropagation()}>
