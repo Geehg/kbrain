@@ -1,0 +1,7 @@
+services:
+  app:
+    build: .
+    container_name: kbrain-ai-command-deck-app
+    restart: unless-stopped
+    ports:
+      - "8500:3000"
