@@ -15,7 +15,8 @@ LUMINKEY NOVA KINE을 위한 AI 작업용 키맵·매크로 configurator입니�
 - USB-C, 2.4GHz, Bluetooth 연결 모드 관리
 - 레이어별 키·AI 프롬프트·매크로 설정
 - JSON 설정 가져오기와 내보내기
-- WebHID 기반 장치 연결 진단
+- WebHID/VIA 기반 실시간 키 매트릭스 테스트
+- 프리셋 키맵 장치 기록 및 키별 읽기 검증
 - 한국어 NOVA KINE 연결·VIA·펌웨어 사용 가이드
 
 ## Local development

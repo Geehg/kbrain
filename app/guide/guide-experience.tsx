@@ -2,49 +2,23 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { transformLkKineLayout, type PlateId } from '../lk-kine-profile';
 
 type Mode = 'usb' | 'bluetooth' | 'receiver';
-type PlateId = 'A' | 'B' | 'C' | 'D';
 type Rotation = 0 | 90;
-type Cell = { id:string; col:number; row:number; width?:number; height?:number };
 
 const keypadKeys = [
   { id:'print', label:'Print', col:1, row:1 }, { id:'scroll', label:'Scroll', col:2, row:1 },
   { id:'pause', label:'Pause', col:3, row:1 }, { id:'home', label:'Home', sub:'hold · Fn', col:4, row:1 },
-  { id:'num', label:'Num', sub:'Lock', col:1, row:2 }, { id:'divide', label:'÷', col:2, row:2 },
-  { id:'multiply', label:'×', col:3, row:2 }, { id:'minus', label:'−', col:4, row:2 },
-  { id:'7', label:'7', col:1, row:3 }, { id:'8', label:'8', col:2, row:3 }, { id:'9', label:'9', col:3, row:3 },
-  { id:'plus', label:'+', col:4, row:3, height:2 },
-  { id:'4', label:'4', col:1, row:4 }, { id:'5', label:'5', col:2, row:4 }, { id:'6', label:'6', col:3, row:4 },
-  { id:'1', label:'1', col:1, row:5 }, { id:'2', label:'2', col:2, row:5 }, { id:'3', label:'3', col:3, row:5 },
-  { id:'enter', label:'Enter', col:4, row:5, height:2 },
-  { id:'0', label:'0', col:1, row:6, width:2 }, { id:'dot', label:'.', col:3, row:6 },
+  { id:'num', label:'Num', sub:'Lock', col:1, row:3 }, { id:'divide', label:'÷', col:2, row:3 },
+  { id:'multiply', label:'×', col:3, row:3 }, { id:'minus', label:'−', col:4, row:3 },
+  { id:'7', label:'7', col:1, row:4 }, { id:'8', label:'8', col:2, row:4 }, { id:'9', label:'9', col:3, row:4 },
+  { id:'plus', label:'+', col:4, row:4, height:2 },
+  { id:'4', label:'4', col:1, row:5 }, { id:'5', label:'5', col:2, row:5 }, { id:'6', label:'6', col:3, row:5 },
+  { id:'1', label:'1', col:1, row:6 }, { id:'2', label:'2', col:2, row:6 }, { id:'3', label:'3', col:3, row:6 },
+  { id:'enter', label:'Enter', col:4, row:6, height:2 },
+  { id:'0', label:'0', col:1, row:7, width:2 }, { id:'dot', label:'.', col:3, row:7 },
 ];
-
-const plateLayouts:Record<PlateId,Cell[]> = {
-  A:[
-    ...Array.from({length:8},(_,i)=>({id:`a-${i}`,col:i%4+1,row:Math.floor(i/4)+1})),
-    {id:'a-8',col:1,row:3},{id:'a-9',col:2,row:3},{id:'a-10',col:3,row:3},{id:'a-11',col:4,row:3,height:2},
-    {id:'a-12',col:1,row:4},{id:'a-13',col:2,row:4},{id:'a-14',col:3,row:4},
-    {id:'a-15',col:1,row:5},{id:'a-16',col:2,row:5},{id:'a-17',col:3,row:5},{id:'a-18',col:4,row:5,height:2},
-    {id:'a-19',col:1,row:6,width:2},{id:'a-20',col:3,row:6},
-  ],
-  B:[
-    ...Array.from({length:8},(_,i)=>({id:`b-${i}`,col:i%4+1,row:Math.floor(i/4)+1})),
-    {id:'b-8',col:1,row:3,height:2},{id:'b-9',col:2,row:3},{id:'b-10',col:3,row:3},{id:'b-11',col:4,row:3},
-    {id:'b-12',col:2,row:4},{id:'b-13',col:3,row:4},{id:'b-14',col:4,row:4},
-    {id:'b-15',col:1,row:5},{id:'b-16',col:2,row:5},{id:'b-17',col:3,row:5},{id:'b-18',col:4,row:5},
-    {id:'b-19',col:1,row:6,width:2},{id:'b-20',col:3,row:6,width:2},
-  ],
-  C:[
-    ...Array.from({length:4},(_,i)=>({id:`c-${i}`,col:i+1,row:1})),
-    {id:'c-4',col:1,row:2,width:2},{id:'c-5',col:3,row:2,width:2},
-    {id:'c-6',col:1,row:3},{id:'c-7',col:2,row:3},{id:'c-8',col:3,row:3},{id:'c-9',col:4,row:3,height:2},
-    {id:'c-10',col:1,row:4},{id:'c-11',col:2,row:4},{id:'c-12',col:3,row:4},
-    ...Array.from({length:8},(_,i)=>({id:`c-${i+13}`,col:i%4+1,row:Math.floor(i/4)+5})),
-  ],
-  D:Array.from({length:24},(_,i)=>({id:`d-${i}`,col:i%4+1,row:Math.floor(i/4)+1})),
-};
 
 const modeInfo:Record<Mode,{label:string;color:string;steps:{title:string;copy:string;keys?:string[];signal?:string}[]}> = {
   usb:{ label:'USB-C 유선', color:'red', steps:[
@@ -134,26 +108,17 @@ export function PairingCoach() {
   </div>;
 }
 
-function transformPlate(cells:Cell[], mirrored:boolean, rotation:Rotation) {
-  const base=cells.map(cell=>{
-    const width=cell.width??1; const height=cell.height??1;
-    return {...cell,width,height,col:mirrored?6-cell.col-width:cell.col};
-  });
-  if (rotation===0) return {cells:base,columns:4,rows:6};
-  return {cells:base.map(cell=>({ ...cell,col:8-cell.row-cell.height,row:cell.col,width:cell.height,height:cell.width })),columns:6,rows:4};
-}
-
 export function PlateExplorer() {
   const [plate,setPlate]=useState<PlateId>('A');
   const [mirrored,setMirrored]=useState(false);
   const [rotation,setRotation]=useState<Rotation>(0);
-  const layout=useMemo(()=>transformPlate(plateLayouts[plate],mirrored&&plate!=='D',rotation),[plate,mirrored,rotation]);
+  const layout=useMemo(()=>transformLkKineLayout(plate,mirrored&&plate!=='D',rotation),[plate,mirrored,rotation]);
   const descriptions:Record<PlateId,string>={A:'오른쪽 세로 2U 2개 + 하단 가로 2U',B:'왼쪽 세로 2U + 하단 가로 2U 2개',C:'상단 가로 2U 2개 + 오른쪽 세로 2U',D:'24개의 1U 키를 사용하는 직교 배열'};
   return <div className="plate-explorer">
     <div className="plate-toolbar"><div>{(['A','B','C','D'] as PlateId[]).map(id=><button key={id} className={plate===id?'active':''} onClick={()=>setPlate(id)}>PLATE {id}</button>)}</div><div><button disabled={plate==='D'} className={mirrored?'active':''} onClick={()=>setMirrored(value=>!value)}>↔ 좌우 미러</button><button className={rotation===90?'active':''} onClick={()=>setRotation(value=>value===0?90:0)}>↻ {rotation===0?'세로':'가로'}</button></div></div>
     <div className="plate-workbench">
-      <div className={`plate-blueprint ${rotation===90?'landscape':''}`} style={{gridTemplateColumns:`repeat(${layout.columns},1fr)`,gridTemplateRows:`repeat(${layout.rows},1fr)`}}>{layout.cells.map(cell=><i key={cell.id} style={{gridColumn:`${cell.col} / span ${cell.width}`,gridRow:`${cell.row} / span ${cell.height}`}}><span>{cell.width>1||cell.height>1?'2U':'1U'}</span></i>)}</div>
-      <div className="plate-detail"><p>PLATE {plate} · {mirrored&&plate!=='D'?'MIRRORED · ':''}{rotation===90?'LANDSCAPE':'PORTRAIT'}</p><h3>{descriptions[plate]}</h3><ul><li><b>{layout.cells.length}</b> 물리 키</li><li><b>{layout.cells.filter(cell=>cell.width>1||cell.height>1).length}</b> 2U 키</li><li><b>{rotation===90?'6 × 4':'4 × 6'}</b> 배치 면적</li></ul><small>도면은 스위치 플레이트의 점유 칸을 기준으로 표시합니다. 회전해도 키 ID와 저장된 기능은 유지됩니다.</small></div>
+      <div className={`plate-blueprint ${rotation===90?'landscape':''}`} style={{gridTemplateColumns:layout.gridTemplateColumns,gridTemplateRows:layout.gridTemplateRows}}>{layout.cells.map(cell=><i key={cell.id} style={{gridColumn:`${cell.col} / span ${cell.width}`,gridRow:`${cell.row} / span ${cell.height}`}}><span>{cell.width>1||cell.height>1?'2U':'1U'}</span></i>)}</div>
+      <div className="plate-detail"><p>PLATE {plate} · {mirrored&&plate!=='D'?'MIRRORED · ':''}{rotation===90?'LANDSCAPE':'PORTRAIT'}</p><h3>{descriptions[plate]}</h3><ul><li><b>{layout.cells.length}</b> 물리 키</li><li><b>{layout.cells.filter(cell=>cell.width>1||cell.height>1).length}</b> 2U 키</li><li><b>{rotation===90?'가로형':'세로형'}</b> 장치 방향</li></ul><small>상단 4키 스트립과 하단 교체 플레이트 사이의 간격까지 VIA 도면대로 표시합니다. 회전해도 매트릭스 주소는 유지됩니다.</small></div>
     </div>
   </div>;
 }

@@ -2,7 +2,22 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { isLkKine, LK_KINE_PROFILE } from './lk-kine-profile';
+import {
+  isLkKine,
+  LK_KINE_AUXILIARY,
+  LK_KINE_PROFILE,
+  transformLkKineLayout,
+  type MatrixAddress,
+  type PlateId,
+  type Rotation,
+} from './lk-kine-profile';
+import {
+  qmkKeycodeForAction,
+  qmkKeycodeMatchesDomEvent,
+  ViaWebHidClient,
+  type LkKineHidApi,
+  type LkKineHidDevice,
+} from './via-webhid';
 
 type ActionType = 'keyboard' | 'application' | 'ai' | 'agent' | 'macro' | 'system';
 type KeyConfig = {
@@ -18,57 +33,13 @@ type KeyConfig = {
 };
 type Layer = { id: string; name: string; short: string; keys: KeyConfig[] };
 type Macro = { id: string; name: string; steps: string[] };
-type PlateId = 'A' | 'B' | 'C' | 'D';
-type Rotation = 0 | 90 | 180 | 270;
 type ConnectionMode = 'usb' | '2.4g' | 'bluetooth';
 type HardwareConfig = { plate: PlateId; mirrored: boolean; rotation: Rotation; connectionMode: ConnectionMode };
 type ViaProfileRef = { name:string; vendorId:string; productId:string; matrix:{rows:number;cols:number}; auxiliaryKeys:string[]; encoder:string };
 type DeckConfig = { version: 1; profile: string; layers: Layer[]; macros: Macro[]; hardware?: HardwareConfig; via?:ViaProfileRef; updatedAt: string };
-type PhysicalKey = { col: number; row: number; width?: number; height?: number };
-type HidDeviceLike = { productName: string; vendorId: number; productId: number; opened: boolean; open: () => Promise<void>; close?: () => Promise<void> };
 
 const defaultHardware: HardwareConfig = { plate: 'A', mirrored: false, rotation: 90, connectionMode: 'usb' };
 const viaProfile:ViaProfileRef = { name:LK_KINE_PROFILE.name, vendorId:LK_KINE_PROFILE.vendorIdHex, productId:LK_KINE_PROFILE.productIdHex, matrix:{...LK_KINE_PROFILE.matrix}, auxiliaryKeys:[...LK_KINE_PROFILE.auxiliaryKeys], encoder:LK_KINE_PROFILE.encoder };
-
-const singles = (rows: number, cols: number): PhysicalKey[] => Array.from({ length: rows * cols }, (_, index) => ({ col:(index % cols)+1, row:Math.floor(index/cols)+1 }));
-const plateLayouts: Record<PlateId, PhysicalKey[]> = {
-  A: [
-    ...singles(2,4),
-    {col:1,row:3},{col:2,row:3},{col:3,row:3},{col:4,row:3,height:2},
-    {col:1,row:4},{col:2,row:4},{col:3,row:4},
-    {col:1,row:5},{col:2,row:5},{col:3,row:5},{col:4,row:5,height:2},
-    {col:1,row:6,width:2},{col:3,row:6},
-  ],
-  B: [
-    ...singles(2,4),
-    {col:1,row:3,height:2},{col:2,row:3},{col:3,row:3},{col:4,row:3},
-    {col:2,row:4},{col:3,row:4},{col:4,row:4},
-    {col:1,row:5},{col:2,row:5},{col:3,row:5},{col:4,row:5},
-    {col:1,row:6,width:2},{col:3,row:6,width:2},
-  ],
-  C: [
-    ...singles(1,4),
-    {col:1,row:2,width:2},{col:3,row:2,width:2},
-    {col:1,row:3},{col:2,row:3},{col:3,row:3},{col:4,row:3,height:2},
-    {col:1,row:4},{col:2,row:4},{col:3,row:4},
-    ...Array.from({length:8},(_,index)=>({col:(index%4)+1,row:Math.floor(index/4)+5})),
-  ],
-  D: singles(6,4),
-};
-
-const transformLayout = (plate: PlateId, mirrored: boolean, rotation: Rotation) => {
-  const base = plateLayouts[plate].map(cell => {
-    const width=cell.width??1; const height=cell.height??1;
-    return { ...cell, width, height, col:mirrored ? 6-cell.col-width : cell.col };
-  });
-  const cells = base.map(cell => {
-    if (rotation===90) return { col:8-cell.row-cell.height, row:cell.col, width:cell.height, height:cell.width };
-    if (rotation===180) return { col:6-cell.col-cell.width, row:8-cell.row-cell.height, width:cell.width, height:cell.height };
-    if (rotation===270) return { col:cell.row, row:6-cell.col-cell.width, width:cell.height, height:cell.width };
-    return cell;
-  });
-  return { cells, columns:rotation===90||rotation===270 ? 6 : 4, rows:rotation===90||rotation===270 ? 4 : 6 };
-};
 
 const key = (id: string, label: string, kind: ActionType, action: string, prompt = '', tone?: KeyConfig['tone']): KeyConfig => ({
   id, label, glyph: label.slice(0, 2).toUpperCase(), kind, action, prompt, confirm: ['APPROVE', 'STOP', 'DEPLOY', 'MERGE'].includes(label), hud: kind === 'ai' || kind === 'agent', tone,
@@ -96,6 +67,7 @@ const createDefaultConfig = (): DeckConfig => ({
       key('ai-19','FIGMA','application','Open Figma'), key('ai-20','ADOBE','application','Open Adobe CC'),
       key('ai-21','VOICE','system','Push to talk'), key('ai-22','FILES','system','Attach files'),
       key('ai-23','CONTEXT','ai','Summarize context'), key('ai-24','SUMMARY','ai','Create handoff summary'),
+      key('ai-25','AI','system','Switch to AI layer'), key('ai-26','DEV','system','Switch to Develop layer'), key('ai-27','DES','system','Switch to Design layer'),
     ]},
     { id: 'dev', name: 'DEVELOP', short: 'DEV', keys: [
       key('dev-01','CODEX','application','Open Codex'), key('dev-02','CLAUDE','application','Open Claude Code'), key('dev-03','GITHUB','application','Open GitHub'), key('dev-04','TERM','application','Open Terminal'),
@@ -104,6 +76,7 @@ const createDefaultConfig = (): DeckConfig => ({
       key('dev-13','COMMIT','macro','Git commit'), key('dev-14','PUSH','macro','Git push'), key('dev-15','PR','macro','Create pull request'), key('dev-16','MERGE','macro','Merge pull request','', 'dark'),
       key('dev-17','SERVER','system','Server status'), key('dev-18','DOCKER','application','Open Docker'), key('dev-19','NAS','application','Open NAS'), key('dev-20','LOGS','system','Tail logs'),
       key('dev-21','UNDO','keyboard','⌘Z'), key('dev-22','COPY','keyboard','⌘C'), key('dev-23','PASTE','keyboard','⌘V'), key('dev-24','SAVE','keyboard','⌘S'),
+      key('dev-25','AI','system','Switch to AI layer'), key('dev-26','DEV','system','Switch to Develop layer'), key('dev-27','DES','system','Switch to Design layer'),
     ]},
     { id: 'design', name: 'DESIGN', short: 'DES', keys: [
       key('des-01','FIGMA','application','Open Figma'), key('des-02','PS','application','Open Photoshop'), key('des-03','ILLUST','application','Open Illustrator'), key('des-04','PREMIERE','application','Open Premiere'),
@@ -112,6 +85,7 @@ const createDefaultConfig = (): DeckConfig => ({
       key('des-13','PROJECT','system','Open project'), key('des-14','NAS','application','Open NAS'), key('des-15','REF','system','Open references'), key('des-16','PROMPTS','system','Open prompt library'),
       key('des-17','UNDO','keyboard','⌘Z'), key('des-18','REDO','keyboard','⇧⌘Z'), key('des-19','COPY','keyboard','⌘C'), key('des-20','PASTE','keyboard','⌘V'),
       key('des-21','ZOOM+','keyboard','⌘+'), key('des-22','ZOOM−','keyboard','⌘-'), key('des-23','FIT','keyboard','⇧1'), key('des-24','SAVE','keyboard','⌘S'),
+      key('des-25','AI','system','Switch to AI layer'), key('des-26','DEV','system','Switch to Develop layer'), key('des-27','DES','system','Switch to Design layer'),
     ]},
     { id: 'system', name: 'SYSTEM', short: 'SYS', keys: [
       key('sys-01','FINDER','application','Open Finder'), key('sys-02','BROWSER','application','Open Browser'), key('sys-03','CHATGPT','application','Open ChatGPT'), key('sys-04','CLAUDE','application','Open Claude'),
@@ -120,6 +94,7 @@ const createDefaultConfig = (): DeckConfig => ({
       key('sys-13','CAL','application','Open Calendar'), key('sys-14','MAIL','application','Open Mail'), key('sys-15','NOTES','application','Open Notes'), key('sys-16','SEARCH','keyboard','⌘Space'),
       key('sys-17','DESKTOP','keyboard','F11'), key('sys-18','LOCK','keyboard','⌃⌘Q'), key('sys-19','MIC','system','Toggle microphone'), key('sys-20','FOCUS','system','Toggle Focus'),
       key('sys-21','AI','system','Switch to AI layer'), key('sys-22','DEV','system','Switch to Develop layer'), key('sys-23','DESIGN','system','Switch to Design layer'), key('sys-24','SLEEP','system','Sleep display','', 'dark'),
+      key('sys-25','AI','system','Switch to AI layer'), key('sys-26','DEV','system','Switch to Develop layer'), key('sys-27','DES','system','Switch to Design layer'),
     ]},
   ],
   macros: [
@@ -129,6 +104,26 @@ const createDefaultConfig = (): DeckConfig => ({
   ],
 });
 
+const normalizeConfig = (candidate: DeckConfig): DeckConfig => {
+  const defaults = createDefaultConfig();
+  return {
+    ...candidate,
+    hardware: { ...defaultHardware, ...(candidate.hardware ?? {}) },
+    via: viaProfile,
+    layers: defaults.layers.map((defaultLayer) => {
+      const saved = candidate.layers.find((layer) => layer.id === defaultLayer.id);
+      if (!saved) return defaultLayer;
+      return { ...saved, keys: defaultLayer.keys.map((fallback, index) => saved.keys[index] ?? fallback) };
+    }),
+  };
+};
+
+const profilePresets = [
+  { name: 'Content Studio', layerId: 'ai', description: 'AI 제작·검토 워크플로' },
+  { name: 'Development Hub', layerId: 'dev', description: 'Codex·Claude·Git 작업' },
+  { name: 'Design Lab', layerId: 'design', description: 'Figma·Adobe·에셋 작업' },
+] as const;
+
 const typeLabels: Record<ActionType,string> = { keyboard:'키보드', application:'앱', ai:'AI', agent:'에이전트', macro:'매크로', system:'시스템' };
 const actionOptions: Record<ActionType,string[]> = {
   keyboard:['⌘C','⌘V','⌘Z','⇧⌘Z','⌘S','⇧⌘4','⌘Space','사용자 지정 단축키'],
@@ -137,6 +132,15 @@ const actionOptions: Record<ActionType,string[]> = {
   agent:['AI Producer','RFP Analyst','Instructional Designer','Script Analyst','Format Proposal','Visual Strategy','Storyboard Planner','Production QA'],
   macro:['Start dev server','Production build','Run test suite','Deploy site','Export deliverable','Custom workflow'],
   system:['Approve current task','Run selected workflow','Stop active workflow','Retry failed step','Push to talk','Attach files','Open prompt library','Clipboard history'],
+};
+
+const defaultInputMatrix: Record<string, MatrixAddress> = {
+  PrintScreen:'0,0', ScrollLock:'1,0', Pause:'2,0', Home:'3,0',
+  NumLock:'0,1', NumpadDivide:'1,1', NumpadMultiply:'2,1', NumpadSubtract:'3,1',
+  Numpad7:'0,2', Numpad8:'1,3', Numpad9:'2,3', NumpadAdd:'3,3',
+  Numpad4:'0,4', Numpad5:'1,4', Numpad6:'2,4',
+  Numpad1:'0,6', Numpad2:'1,6', Numpad3:'2,6', NumpadEnter:'3,7',
+  Numpad0:'1,8', NumpadDecimal:'2,7',
 };
 
 export default function Home() {
@@ -149,20 +153,30 @@ export default function Home() {
   const [showMacro, setShowMacro] = useState(false);
   const [showDevice, setShowDevice] = useState(false);
   const [deviceState, setDeviceState] = useState<'idle'|'requesting'|'connected'|'unsupported'|'error'>('idle');
-  const [deviceInfo, setDeviceInfo] = useState<{name:string;vid:string;pid:string}|null>(null);
+  const [deviceInfo, setDeviceInfo] = useState<{name:string;vid:string;pid:string;protocol:string}|null>(null);
+  const [keyTestEnabled, setKeyTestEnabled] = useState(false);
+  const [matrixPressed, setMatrixPressed] = useState<Set<MatrixAddress>>(() => new Set());
+  const [domPressed, setDomPressed] = useState<Set<MatrixAddress>>(() => new Set());
+  const [testedKeys, setTestedKeys] = useState<Set<MatrixAddress>>(() => new Set());
+  const [testSource, setTestSource] = useState<'matrix'|'keyboard'|'waiting'>('waiting');
+  const [applyState, setApplyState] = useState<{status:'idle'|'applying'|'success'|'error';done:number;total:number;message:string}>({status:'idle',done:0,total:0,message:''});
   const [macroSteps, setMacroSteps] = useState<string[]>(['현재 파일 저장','선택한 에이전트 실행','결과를 HUD에 표시']);
   const [newStep, setNewStep] = useState('');
   const importRef = useRef<HTMLInputElement>(null);
+  const deviceRef = useRef<LkKineHidDevice|null>(null);
+  const viaClientRef = useRef<ViaWebHidClient|null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const saved = localStorage.getItem('kbrain-command-deck-v1');
       if (!saved) return;
       try {
-        const next = JSON.parse(saved) as DeckConfig;
-        const first = next.layers[0]?.keys[0];
+        const next = normalizeConfig(JSON.parse(saved) as DeckConfig);
+        const presetLayerId = profilePresets.find((preset) => preset.name === next.profile)?.layerId ?? next.layers[0]?.id;
+        const restoredLayer = next.layers.find((layer) => layer.id === presetLayerId) ?? next.layers[0];
+        const first = restoredLayer?.keys[0];
         setConfig(next);
-        if (first) { setActiveLayerId(next.layers[0].id); setSelectedKeyId(first.id); setDraft(first); }
+        if (first) { setActiveLayerId(restoredLayer.id); setSelectedKeyId(first.id); setDraft(first); }
       } catch { /* keep safe defaults */ }
     }, 0);
     return () => window.clearTimeout(timer);
@@ -171,7 +185,65 @@ export default function Home() {
   const activeLayer = useMemo(() => config.layers.find(layer => layer.id === activeLayerId) ?? config.layers[0], [config, activeLayerId]);
   const selectedIndex = activeLayer.keys.findIndex(item => item.id === selectedKeyId);
   const hardware = config.hardware ?? defaultHardware;
-  const physicalLayout = useMemo(() => transformLayout(hardware.plate, hardware.mirrored, hardware.rotation), [hardware]);
+  const physicalLayout = useMemo(() => transformLkKineLayout(hardware.plate, hardware.mirrored, hardware.rotation), [hardware]);
+  const pressedKeys = useMemo(() => new Set<MatrixAddress>([...matrixPressed, ...domPressed]), [matrixPressed, domPressed]);
+
+  useEffect(() => {
+    if (!keyTestEnabled || deviceState !== 'connected' || applyState.status === 'applying') return;
+    let stopped = false;
+    let busy = false;
+    let failures = 0;
+    const poll = async () => {
+      const client = viaClientRef.current;
+      if (!client || stopped || busy) return;
+      busy = true;
+      try {
+        const next = await client.getMatrixState();
+        if (stopped) return;
+        failures = 0;
+        setMatrixPressed(next);
+        if (next.size) {
+          setTestSource('matrix');
+          setTestedKeys((current) => new Set([...current, ...next]));
+        }
+      } catch {
+        failures += 1;
+        if (failures >= 2 && !stopped) setTestSource('keyboard');
+      } finally {
+        busy = false;
+      }
+    };
+    void poll();
+    const timer = window.setInterval(poll, 90);
+    return () => { stopped = true; window.clearInterval(timer); setMatrixPressed(new Set()); };
+  }, [keyTestEnabled, deviceState, applyState.status]);
+
+  useEffect(() => {
+    if (!keyTestEnabled) return;
+    const addressForEvent = (event: KeyboardEvent) => {
+      const assignments = [
+        ...physicalLayout.cells.map((cell,index)=>({address:cell.matrix,item:activeLayer.keys[index],index})),
+        ...LK_KINE_AUXILIARY.map((address,index)=>({address,item:activeLayer.keys[24+index],index:24+index})),
+      ];
+      const presetMatch = assignments.find(({item,index}) => qmkKeycodeMatchesDomEvent(qmkKeycodeForAction(item?.action ?? '', index), event));
+      return presetMatch?.address ?? defaultInputMatrix[event.code];
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      const address = addressForEvent(event);
+      if (!address) return;
+      setTestSource((source) => source === 'matrix' ? source : 'keyboard');
+      setDomPressed((current) => new Set([...current, address]));
+      setTestedKeys((current) => new Set([...current, address]));
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      const address = addressForEvent(event);
+      if (!address) return;
+      setDomPressed((current) => { const next = new Set(current); next.delete(address); return next; });
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
+  }, [keyTestEnabled, physicalLayout.cells, activeLayer]);
 
   const flash = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 2200); };
   const switchLayer = (id: string) => {
@@ -195,10 +267,19 @@ export default function Home() {
   const importConfig = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]; if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => { try { const next = JSON.parse(String(reader.result)) as DeckConfig; if (next.version !== 1 || !Array.isArray(next.layers) || !next.layers[0]?.keys[0]) throw new Error(); const first=next.layers[0].keys[0]; setConfig(next); setActiveLayerId(next.layers[0].id); setSelectedKeyId(first.id); setDraft(first); localStorage.setItem('kbrain-command-deck-v1', JSON.stringify(next)); flash('설정을 가져왔습니다'); } catch { flash('올바른 Command Deck JSON이 아닙니다'); } };
+    reader.onload = () => { try { const imported = JSON.parse(String(reader.result)) as DeckConfig; if (imported.version !== 1 || !Array.isArray(imported.layers) || !imported.layers[0]?.keys[0]) throw new Error(); const next=normalizeConfig(imported); const first=next.layers[0].keys[0]; setConfig(next); setActiveLayerId(next.layers[0].id); setSelectedKeyId(first.id); setDraft(first); localStorage.setItem('kbrain-command-deck-v1', JSON.stringify(next)); flash('설정을 가져왔습니다'); } catch { flash('올바른 Command Deck JSON이 아닙니다'); } };
     reader.readAsText(file); event.target.value='';
   };
-  const selectProfile = (name: string) => { setConfig(prev => ({ ...prev, profile:name })); setShowProfiles(false); flash(`${name} 프로필로 전환했습니다`); };
+  const selectProfile = (name: string, layerId: string) => {
+    setConfig((current) => {
+      const next = { ...current, profile:name, updatedAt:new Date().toISOString() };
+      localStorage.setItem('kbrain-command-deck-v1', JSON.stringify(next));
+      return next;
+    });
+    switchLayer(layerId);
+    setShowProfiles(false);
+    flash(`${name} 프리셋을 화면에 불러왔습니다`);
+  };
   const addMacroStep = () => { if (!newStep.trim()) return; setMacroSteps(prev => [...prev, newStep.trim()]); setNewStep(''); };
   const updateHardware = (patch: Partial<HardwareConfig>) => {
     setConfig(prev => {
@@ -207,26 +288,77 @@ export default function Home() {
       return next;
     });
     setSelectedKeyId(activeLayer.keys[0].id); setDraft(activeLayer.keys[0]);
+    setTestedKeys(new Set());
+  };
+  const finishConnection = async (device: LkKineHidDevice) => {
+    if (!device.opened) await device.open();
+    const client = new ViaWebHidClient(device);
+    const protocol = await client.getProtocolVersion();
+    if (!isLkKine(device.vendorId,device.productId)) throw new Error('LK-KINE VID/PID와 일치하지 않습니다.');
+    deviceRef.current = device;
+    viaClientRef.current = client;
+    setDeviceInfo({
+      name:device.productName||'LK-KINE',
+      vid:`0x${device.vendorId.toString(16).padStart(4,'0')}`,
+      pid:`0x${device.productId.toString(16).padStart(4,'0')}`,
+      protocol:`v${protocol}`,
+    });
+    setDeviceState('connected');
+    setKeyTestEnabled(true);
+    setTestSource('waiting');
+    flash(`LK-KINE 연결 완료 · VIA protocol ${protocol}`);
   };
   const connectHid = async () => {
-    const hid = (navigator as Navigator & { hid?: { requestDevice:(options:{filters:object[]})=>Promise<HidDeviceLike[]> } }).hid;
+    const hid = (navigator as Navigator & { hid?: LkKineHidApi }).hid;
     if (!hid) { setDeviceState('unsupported'); return; }
     setDeviceState('requesting');
     try {
-      const [device] = await hid.requestDevice({ filters:[{ vendorId:LK_KINE_PROFILE.vendorId, productId:LK_KINE_PROFILE.productId }] });
+      const [device] = await hid.requestDevice({ filters:[{
+        vendorId:LK_KINE_PROFILE.vendorId,
+        productId:LK_KINE_PROFILE.productId,
+        usagePage:LK_KINE_PROFILE.rawHid.usagePage,
+        usage:LK_KINE_PROFILE.rawHid.usage,
+      }] });
       if (!device) { setDeviceState('idle'); return; }
-      if (!device.opened) await device.open();
-      setDeviceInfo({ name:device.productName||'HID Device', vid:`0x${device.vendorId.toString(16).padStart(4,'0')}`, pid:`0x${device.productId.toString(16).padStart(4,'0')}` });
-      setDeviceState(isLkKine(device.vendorId,device.productId)?'connected':'error');
-      flash(isLkKine(device.vendorId,device.productId)?'LK-KINE VIA 장치 프로필이 일치합니다':'LK-KINE VID/PID와 일치하지 않습니다');
+      await finishConnection(device);
     } catch (error) {
       const name = error instanceof DOMException ? error.name : '';
       setDeviceState(name==='NotFoundError' ? 'idle' : 'error');
+      if (name !== 'NotFoundError') flash(error instanceof Error ? error.message : 'LK-KINE 연결에 실패했습니다');
+    }
+  };
+  const applyPresetToDevice = async () => {
+    const client = viaClientRef.current;
+    if (!client || deviceState !== 'connected') { setShowDevice(true); flash('먼저 USB-C로 LK-KINE을 연결하세요'); return; }
+    const layerIndex = config.layers.indexOf(activeLayer);
+    const assignments = [
+      ...physicalLayout.cells.map((cell,index) => ({ address:cell.matrix, item:activeLayer.keys[index], index })),
+      ...LK_KINE_AUXILIARY.map((address,index) => ({ address, item:activeLayer.keys[24+index], index:24+index })),
+    ];
+    if (!window.confirm(`${config.profile}의 ${activeLayer.name} 키 ${assignments.length}개를 LK-KINE Layer ${layerIndex}에 기록할까요?`)) return;
+    setKeyTestEnabled(false);
+    setApplyState({status:'applying',done:0,total:assignments.length,message:'VIA 키맵을 기록하고 있습니다'});
+    try {
+      const layerCount = await client.getLayerCount();
+      if (layerIndex >= layerCount) throw new Error(`장치 펌웨어는 ${layerCount}개 레이어만 지원합니다.`);
+      for (let index = 0; index < assignments.length; index += 1) {
+        const assignment = assignments[index];
+        await client.setKeycode(layerIndex, assignment.address, qmkKeycodeForAction(assignment.item.action, assignment.index));
+        setApplyState({status:'applying',done:index+1,total:assignments.length,message:`M[${assignment.address}] 검증 완료`});
+      }
+      setApplyState({status:'success',done:assignments.length,total:assignments.length,message:`Layer ${layerIndex} 읽기 검증 완료`});
+      flash(`${config.profile} 프리셋을 장치에 적용했습니다`);
+    } catch (error) {
+      setApplyState({status:'error',done:0,total:assignments.length,message:error instanceof Error ? error.message : '프리셋 적용 실패'});
+      flash(error instanceof Error ? error.message : '프리셋 적용에 실패했습니다');
+    } finally {
+      setKeyTestEnabled(true);
     }
   };
   const checkSync = () => {
     if (!deviceInfo) { setShowDevice(true); flash('먼저 USB 또는 동글 HID 장치를 연결하세요'); return; }
-    flash('LK-KINE 프로필 확인 완료 · Raw HID 쓰기는 안전 모드입니다');
+    setKeyTestEnabled(true);
+    flash('VIA 연결 확인 완료 · 키 테스트를 시작합니다');
   };
 
   return (
@@ -251,8 +383,7 @@ export default function Home() {
               <span>NK</span><div><strong>{config.profile}</strong><small>macOS · NOVA KINE</small></div><b>⌄</b>
             </button>
             {showProfiles && <div className="profile-menu">
-              {['Content Studio','Development Hub','Design Lab'].map(name => <button key={name} className={config.profile === name ? 'active' : ''} onClick={() => selectProfile(name)}>{name}<span>{config.profile === name ? '✓' : ''}</span></button>)}
-              <button onClick={() => selectProfile(`${config.profile} Copy`)}>＋ 현재 프로필 복제</button>
+              {profilePresets.map(preset => <button key={preset.name} className={config.profile === preset.name ? 'active' : ''} onClick={() => selectProfile(preset.name,preset.layerId)}><span><b>{preset.name}</b><small>{preset.description}</small></span><em>{config.profile === preset.name ? '✓' : '→'}</em></button>)}
             </div>}
           </div>
           <p className="eyebrow layer-title">LAYERS</p>
@@ -263,30 +394,33 @@ export default function Home() {
         <section className="canvas-panel">
           <div className="section-heading">
             <div><p className="eyebrow">KEYMAP / LAYER {String(config.layers.indexOf(activeLayer)+1).padStart(2,'0')}</p><h1>{activeLayer.name}</h1></div>
-            <div className="history-actions"><button aria-label="이전 키" onClick={() => selectKey(activeLayer.keys[(selectedIndex+23)%24])}>←</button><button aria-label="다음 키" onClick={() => selectKey(activeLayer.keys[(selectedIndex+1)%24])}>→</button><button onClick={resetLayer}>초기화</button></div>
+            <div className="history-actions"><button aria-label="이전 키" onClick={() => selectKey(activeLayer.keys[(selectedIndex+activeLayer.keys.length-1)%activeLayer.keys.length])}>←</button><button aria-label="다음 키" onClick={() => selectKey(activeLayer.keys[(selectedIndex+1)%activeLayer.keys.length])}>→</button><button onClick={resetLayer}>초기화</button></div>
           </div>
 
           <div className="hardware-toolbar" aria-label="물리 배열 설정">
             <div className="hardware-group"><span>PLATE</span>{(['A','B','C','D'] as PlateId[]).map(plate => <button key={plate} className={hardware.plate===plate?'active':''} onClick={() => updateHardware({plate})}>{plate}</button>)}</div>
             <div className="hardware-group"><span>MIRROR</span><button className={!hardware.mirrored?'active':''} onClick={() => updateHardware({mirrored:false})}>LEFT</button><button className={hardware.mirrored?'active':''} onClick={() => updateHardware({mirrored:true})}>RIGHT</button></div>
             <div className="hardware-group"><span>ROTATE</span>{([0,90,180,270] as Rotation[]).map(rotation => <button key={rotation} className={hardware.rotation===rotation?'active':''} onClick={() => updateHardware({rotation})}>{rotation}°</button>)}</div>
+            <div className="hardware-group test-group"><span>KEY TEST</span><button className={keyTestEnabled?'active':''} onClick={() => { setKeyTestEnabled(value=>!value); setTestedKeys(new Set()); }}>{keyTestEnabled?'ON':'OFF'}</button><b>{testedKeys.size}/{physicalLayout.cells.length+3}</b></div>
+            <button className="apply-device-button" disabled={applyState.status==='applying'} onClick={applyPresetToDevice}>{applyState.status==='applying'?`${applyState.done}/${applyState.total} 적용 중`:'프리셋을 기기에 적용'}</button>
           </div>
 
           <div className="device-stage"><div>
-            <div className="device-label"><span>NOVA KINE · PLATE {hardware.plate}</span><small>{hardware.rotation===90||hardware.rotation===270?'LANDSCAPE':'PORTRAIT'} · {hardware.mirrored?'RIGHT MIRROR':'LEFT STANDARD'} · {physicalLayout.cells.length} PLATE + 3 AUX + E0</small></div>
+            <div className="device-label"><span>NOVA KINE · PLATE {hardware.plate}</span><small>{hardware.rotation===90||hardware.rotation===270?'LANDSCAPE':'PORTRAIT'} · {hardware.mirrored?'RIGHT MIRROR':'LEFT STANDARD'} · {physicalLayout.cells.length} KEYS + 3 AUX + E0</small></div>
             <div className={`device-body rot-${hardware.rotation}`}>
-              <div className="key-grid physical-grid" style={{gridTemplateColumns:`repeat(${physicalLayout.columns}, minmax(0,1fr))`,gridTemplateRows:`repeat(${physicalLayout.rows}, minmax(0,1fr))`}}>
-                {physicalLayout.cells.map((cell,index) => { const item=activeLayer.keys[index]; return <button key={`${hardware.plate}-${index}`} style={{gridColumn:`${cell.col} / span ${cell.width}`,gridRow:`${cell.row} / span ${cell.height}`}} aria-label={`${item.label} 키 편집`} className={`deck-key ${selectedKeyId === item.id ? 'selected' : ''} ${item.tone ? 'accent-key' : ''} ${(cell.width??1)>1?'wide-key':''} ${(cell.height??1)>1?'tall-key':''}`} onClick={() => selectKey(item)}><span>{item.glyph}</span><strong>{item.label}</strong><small>{typeLabels[item.kind].toUpperCase()} · {String(index+1).padStart(2,'0')}</small></button>; })}
+              <div className="key-grid physical-grid" style={{gridTemplateColumns:physicalLayout.gridTemplateColumns,gridTemplateRows:physicalLayout.gridTemplateRows}}>
+                {physicalLayout.cells.map((cell,index) => { const item=activeLayer.keys[index]; const pressed=pressedKeys.has(cell.matrix); const tested=testedKeys.has(cell.matrix); return <button key={`${hardware.plate}-${cell.matrix}`} style={{gridColumn:`${cell.col} / span ${cell.width}`,gridRow:`${cell.row} / span ${cell.height}`}} aria-label={`${item.label} 키 · 매트릭스 ${cell.matrix}`} className={`deck-key ${selectedKeyId === item.id ? 'selected' : ''} ${item.tone ? 'accent-key' : ''} ${pressed?'pressed':''} ${tested?'tested':''} ${(cell.width??1)>1?'wide-key':''} ${(cell.height??1)>1?'tall-key':''} ${cell.section==='function'?'function-key':''}`} onClick={() => selectKey(item)}><span>{item.glyph}</span><strong>{item.label}</strong><small>M[{cell.matrix}]</small></button>; })}
               </div>
               <div className="device-controls">
-                <button className={activeLayerId==='ai'?'active':''} onClick={() => switchLayer('ai')}><span>AI</span><small>M[4,9]</small></button>
-                <button className={activeLayerId==='dev'?'active':''} onClick={() => switchLayer('dev')}><span>DEV</span><small>M[4,10]</small></button>
-                <button className={activeLayerId==='design'?'active':''} onClick={() => switchLayer('design')}><span>DES</span><small>M[4,11]</small></button>
-                <button className="roller" onClick={() => flash('엔코더 e0 · 회전 입력을 VIA에서 테스트하세요')}><span /><small>ENCODER E0</small></button>
+                <div className="device-screen"><small>NOVA</small><strong>KINE</strong></div>
+                {LK_KINE_AUXILIARY.map((address,index) => { const item=activeLayer.keys[24+index]; const pressed=pressedKeys.has(address); const tested=testedKeys.has(address); return <button key={address} className={`${selectedKeyId===item.id?'selected':''} ${pressed?'pressed':''} ${tested?'tested':''}`} onClick={()=>selectKey(item)}><span>{item.label}</span><small>M[{address}]</small></button>; })}
+                <button className="roller" onClick={() => flash('엔코더 e0는 회전 시 지정된 키코드로 검사됩니다')}><span /><small>ENCODER E0</small></button>
+                <div className="device-lights" aria-label="상태 표시등"><i/><i className={deviceState==='connected'?'live':''}/></div>
               </div>
             </div>
+            <div className={`test-readout ${keyTestEnabled?'active':''} ${applyState.status}`}><span><i/>{keyTestEnabled ? pressedKeys.size ? `입력 감지 · ${[...pressedKeys].map(value=>`M[${value}]`).join(' ')}` : testSource==='keyboard' ? '브라우저 키 입력 대기 · VIA Matrix 보안 모드' : '실제 키를 눌러 매트릭스를 확인하세요' : '키 테스트 꺼짐'}</span><b>{applyState.message || (deviceState==='connected' ? `VIA ${deviceInfo?.protocol}` : 'USB-C 연결 필요')}</b></div>
           </div></div>
-          <footer className="status-strip"><span><i className={deviceState==='connected'?'live':''} /> {deviceState==='connected'?'LK-KINE 프로필 일치':'오프라인 설계 모드'}</span><span>{physicalLayout.cells.length} PLATE · 3 AUX · E0</span><span>Matrix 5×12 · Plate {hardware.plate} · {hardware.rotation}°</span><button onClick={checkSync}>{deviceInfo?'동기화 확인':'장치 연결'} ↗</button></footer>
+          <footer className="status-strip"><span><i className={deviceState==='connected'?'live':''} /> {deviceState==='connected'?'LK-KINE VIA 연결됨':'오프라인 설계 모드'}</span><span>{physicalLayout.cells.length} KEYS · 3 AUX · E0</span><span>Matrix 5×12 · Plate {hardware.plate} · {hardware.rotation}°</span><button onClick={checkSync}>{deviceInfo?'키 테스트':'장치 연결'} ↗</button></footer>
         </section>
 
         <aside className="inspector">
@@ -301,7 +435,7 @@ export default function Home() {
           {draft.kind==='macro' && <button className="secondary-wide" onClick={() => setShowMacro(true)}>워크플로 매크로 편집 ↗</button>}
           <div className="toggle-row"><div><strong>실행 전 확인</strong><small>중요 명령의 오작동을 방지합니다</small></div><button aria-label="실행 전 확인" className={`toggle ${draft.confirm?'on':''}`} onClick={() => setDraft({...draft,confirm:!draft.confirm})}><span /></button></div>
           <div className="toggle-row"><div><strong>HUD에 상태 표시</strong><small>Agent HUD로 진행 상태를 보냅니다</small></div><button aria-label="HUD 상태 표시" className={`toggle ${draft.hud?'on':''}`} onClick={() => setDraft({...draft,hud:!draft.hud})}><span /></button></div>
-          <button className="save-button" onClick={saveDraft}>키 설정 저장</button>
+          <button className="save-button" onClick={saveDraft}>브라우저에 키 설정 저장</button>
         </aside>
       </section>
 
@@ -321,17 +455,17 @@ export default function Home() {
             <span className="device-pulse" />
             <div>
               <strong>{deviceState==='connected' ? deviceInfo?.name : deviceState==='requesting' ? '장치를 선택하세요' : deviceState==='unsupported' ? 'WebHID 미지원 브라우저' : deviceState==='error' ? '장치를 열 수 없습니다' : '연결된 설정 장치 없음'}</strong>
-              <small>{deviceInfo ? `VID ${deviceInfo.vid.toUpperCase()} · PID ${deviceInfo.pid.toUpperCase()} · ${deviceState==='connected'?'VIA 프로필 일치':'프로필 불일치'}` : 'Chrome 또는 Edge에서 USB-C 연결 후 장치 찾기를 누르세요.'}</small>
+              <small>{deviceInfo ? `VID ${deviceInfo.vid.toUpperCase()} · PID ${deviceInfo.pid.toUpperCase()} · VIA ${deviceInfo.protocol}` : 'Chrome 또는 Edge에서 USB-C 연결 후 장치 찾기를 누르세요.'}</small>
             </div>
             <button onClick={connectHid} disabled={deviceState==='requesting'}>{deviceState==='requesting'?'대기 중':'장치 찾기'}</button>
           </div>
           <ol className="sync-steps">
             <li className={deviceInfo?'done':'active'}><b>01</b><div><strong>OS 연결</strong><small>USB-C, 2.4G 동글 또는 Bluetooth 페어링</small></div></li>
-            <li className={deviceInfo?'active':''}><b>02</b><div><strong>WebHID 권한</strong><small>브라우저에서 NOVA KINE Raw HID 선택</small></div></li>
-            <li className={deviceInfo?'done':''}><b>03</b><div><strong>VIA 프로필 확인</strong><small>LK-KINE · 5×12 matrix · encoder e0</small></div></li>
+            <li className={deviceInfo?'done':''}><b>02</b><div><strong>Raw HID 확인</strong><small>Usage 0xFF60 · 0x61 응답 검증</small></div></li>
+            <li className={deviceInfo?'active':''}><b>03</b><div><strong>키 테스트</strong><small>실제 키를 눌러 화면의 M[row,col] 확인</small></div></li>
           </ol>
-          <aside className="protocol-note"><strong>VIA JSON 반영 · 안전 모드</strong><p>장치 식별자, 매트릭스, 사용자 키코드와 조명 옵션을 적용했습니다. 키맵 쓰기는 VIA Raw HID 명령 규격과 실제 장치 응답까지 검증한 뒤 활성화해야 하므로 현재는 임의 HID 보고서를 전송하지 않습니다.</p></aside>
-          <footer><span>{deviceInfo?'HID transport ready':'Configuration stays local'}</span><button onClick={checkSync} disabled={!deviceInfo}>키맵 동기화 준비 확인</button></footer>
+          <aside className="protocol-note"><strong>VIA 실시간 연결</strong><p>연결 후 5×12 스위치 매트릭스를 읽어 누른 키를 표시합니다. 프리셋 적용은 현재 플레이트의 실제 좌표만 기록하고, 각 키를 다시 읽어 같은 키코드인지 검증합니다.</p></aside>
+          <footer><span>{deviceInfo?`VIA ${deviceInfo.protocol} · Key Test ready`:'Configuration stays local'}</span><button onClick={() => { setShowDevice(false); checkSync(); }} disabled={!deviceInfo}>키 테스트 시작</button></footer>
         </section>
       </div>}
 
