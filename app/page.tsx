@@ -398,11 +398,15 @@ export default function Home() {
           </div>
 
           <div className="hardware-toolbar" aria-label="물리 배열 설정">
-            <div className="hardware-group"><span>PLATE</span>{(['A','B','C','D'] as PlateId[]).map(plate => <button key={plate} className={hardware.plate===plate?'active':''} onClick={() => updateHardware({plate})}>{plate}</button>)}</div>
-            <div className="hardware-group"><span>MIRROR</span><button className={!hardware.mirrored?'active':''} onClick={() => updateHardware({mirrored:false})}>LEFT</button><button className={hardware.mirrored?'active':''} onClick={() => updateHardware({mirrored:true})}>RIGHT</button></div>
-            <div className="hardware-group"><span>ROTATE</span>{([0,90,180,270] as Rotation[]).map(rotation => <button key={rotation} className={hardware.rotation===rotation?'active':''} onClick={() => updateHardware({rotation})}>{rotation}°</button>)}</div>
-            <div className="hardware-group test-group"><span>KEY TEST</span><button className={keyTestEnabled?'active':''} onClick={() => { setKeyTestEnabled(value=>!value); setTestedKeys(new Set()); }}>{keyTestEnabled?'ON':'OFF'}</button><b>{testedKeys.size}/{physicalLayout.cells.length+3}</b></div>
-            <button className="apply-device-button" disabled={applyState.status==='applying'} onClick={applyPresetToDevice}>{applyState.status==='applying'?`${applyState.done}/${applyState.total} 적용 중`:'프리셋을 기기에 적용'}</button>
+            <div className="hardware-options-scroll" aria-label="배열 및 키 테스트 옵션">
+              <div className="hardware-group"><span>PLATE</span>{(['A','B','C','D'] as PlateId[]).map(plate => <button key={plate} className={hardware.plate===plate?'active':''} onClick={() => updateHardware({plate})}>{plate}</button>)}</div>
+              <div className="hardware-group"><span>MIRROR</span><button className={!hardware.mirrored?'active':''} onClick={() => updateHardware({mirrored:false})}>LEFT</button><button className={hardware.mirrored?'active':''} onClick={() => updateHardware({mirrored:true})}>RIGHT</button></div>
+              <div className="hardware-group"><span>ROTATE</span>{([0,90,180,270] as Rotation[]).map(rotation => <button key={rotation} className={hardware.rotation===rotation?'active':''} onClick={() => updateHardware({rotation})}>{rotation}°</button>)}</div>
+            </div>
+            <div className="hardware-actions">
+              <div className="hardware-group test-group"><span>KEY TEST</span><button className={keyTestEnabled?'active':''} onClick={() => { setKeyTestEnabled(value=>!value); setTestedKeys(new Set()); }}>{keyTestEnabled?'ON':'OFF'}</button><b>{testedKeys.size}/{physicalLayout.cells.length+3}</b></div>
+              <button className="apply-device-button" disabled={applyState.status==='applying'} onClick={applyPresetToDevice}>{applyState.status==='applying'?`${applyState.done}/${applyState.total} 적용 중`:'프리셋을 기기에 적용'}</button>
+            </div>
           </div>
 
           <div className="device-stage"><div>
