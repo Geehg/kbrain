@@ -39,7 +39,8 @@
 .nk-side-module { display:grid; grid-template-rows:1.35fr repeat(3,.6fr) .8fr auto; gap:7px; }
 .nk-screen { min-height:52px; display:grid; place-content:center; border-radius:9px; background:#262b29; color:#d7dbd4; box-shadow:inset 0 0 0 1px #111; text-align:center; }
 .nk-screen small { font:600 6px var(--font-geist-mono); letter-spacing:.18em; }.nk-screen b { margin-top:2px; font:800 9px var(--font-geist-mono); letter-spacing:.08em; }
-.nk-side-key { display:block; min-height:24px; border:1px solid #b9bcb5; border-radius:6px; background:#f4f4ef; box-shadow:0 2px 0 #a8aba5; }
+.nk-side-key { display:grid; place-items:center; min-height:24px; border:1px solid #b9bcb5; border-radius:6px; background:#f4f4ef; box-shadow:0 2px 0 #a8aba5; color:#899089; font:800 6px var(--font-geist-mono); transition:.2s ease; }
+.nk-side-key.is-active { border-color:#557bcc; background:#e8efff; color:#244d9d; box-shadow:0 0 0 4px rgba(72,112,203,.18),0 2px 0 #7e99d0; animation:key-guide 1.1s ease-in-out infinite; }
 .nk-roller { display:grid; place-items:center; padding:6px; border-radius:8px; background:#dadcd5; }
 .nk-roller i { width:22px; height:100%; min-height:30px; border-radius:10px; background:repeating-linear-gradient(90deg,#343936 0 2px,#686e69 2px 4px); }
 .nk-indicators { display:flex; justify-content:center; gap:8px; padding-top:2px; }

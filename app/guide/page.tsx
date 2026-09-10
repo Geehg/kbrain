@@ -4,7 +4,7 @@ import { LK_KINE_PROFILE } from '../lk-kine-profile';
 import './guide.css';
 
 export const metadata: Metadata = {
-  title: 'NOVA KINE 한국어 사용 가이드 | KBRAIN',
+  title: 'NOVA KINE 한국어 사용 가이드 | AI PAD',
   description: 'NOVA KINE 연결, VIA 설정, 조합키, 표시등과 펌웨어 업데이트 한국어 가이드',
   openGraph: {
     title: 'NOVA KINE 한국어 사용 가이드',
@@ -48,7 +48,7 @@ export default function GuidePage() {
 
         <article className="guide-content">
           <section id="device" className="guide-section">
-            <div className="section-number">01</div><div className="section-copy"><p className="guide-eyebrow">HARDWARE MAP</p><h2>장치를 한눈에 보기</h2><p>설명서의 기본 숫자패드 도면을 그대로 읽을 수 있게 재구성했습니다. 핵심은 오른쪽 위 <kbd>Home</kbd> 키입니다. 짧게 누르면 Home, 길게 누른 상태에서는 Fn으로 동작합니다.</p><HardwareMap/><aside className="diagram-note"><b>VIA JSON에서 확인한 입력 구조</b><p>메인 플레이트 외에 오른쪽 보조키 3개는 matrix <code>4,9</code> · <code>4,10</code> · <code>4,11</code>, 롤러는 encoder <code>e0</code>입니다. Key Tester에서 네 입력을 모두 확인하세요.</p></aside></div>
+            <div className="section-number">01</div><div className="section-copy"><p className="guide-eyebrow">HARDWARE MAP</p><h2>장치를 한눈에 보기</h2><p>설명서의 기본 숫자패드 도면을 그대로 읽을 수 있게 재구성했습니다. 핵심은 오른쪽 위 <kbd>Home</kbd> 키입니다. 짧게 누르면 Home, 길게 누른 상태에서는 Fn으로 동작합니다.</p><HardwareMap/><aside className="diagram-note"><b>VIA JSON에서 확인한 입력 구조</b><p>메인 플레이트 외에 오른쪽 RF/ST 영역의 보조키 3개는 matrix <code>4,9</code> · <code>4,10</code> · <code>4,11</code>, 롤러는 encoder <code>e0</code>입니다. AI PAD는 이 세 키를 모든 프리셋에서 <code>BT1</code> · <code>BT2</code> · <code>BT3</code>로 보호합니다.</p></aside></div>
           </section>
 
           <section id="start" className="guide-section">
@@ -64,9 +64,9 @@ export default function GuidePage() {
           <section id="connect" className="guide-section">
             <div className="section-number">03</div><div className="section-copy"><p className="guide-eyebrow">CONNECTION</p><h2>화면을 따라 연결하기</h2><p>연결 방식을 선택하면 눌러야 할 키와 확인해야 할 표시등이 순서대로 강조됩니다. 단계 목록을 직접 눌러 원하는 부분만 다시 볼 수도 있습니다.</p><PairingCoach/><div className="connection-cards">
               <article><span className="mode-dot red"/><b>USB-C 유선</b><em>설정 권장</em><p>케이블을 연결하면 자동으로 유선 모드가 됩니다. 표시등은 빨간색입니다. VIA 설정과 펌웨어 업데이트는 유선 모드에서 진행합니다.</p></article>
-              <article><span className="mode-dot blue"/><b>Bluetooth</b><em>3개 슬롯</em><p>케이블을 분리하고 후면 전원을 켭니다. <kbd>Home(Fn)</kbd> + <kbd>1/2/3</kbd>을 3-5초 누른 뒤 빠른 점멸이 시작되면 macOS Bluetooth에서 LK-KINE-BT1/2/3을 선택합니다.</p></article>
+              <article><span className="mode-dot blue"/><b>Bluetooth</b><em>보호 슬롯 3개</em><p>케이블을 분리하고 후면 전원을 켭니다. 우측 <kbd>BT1/2/3</kbd>을 3-5초 눌러 빠른 점멸을 확인하세요. 반응이 없으면 보호된 기본 조합 <kbd>Home(Fn)</kbd> + <kbd>1/2/3</kbd>을 사용합니다.</p></article>
               <article><span className="mode-dot green"/><b>2.4GHz</b><em>동글</em><p>짧게 <kbd>Home(Fn)</kbd> + <kbd>4</kbd>를 눌러 전환하고 동글을 꽂습니다. 재페어링은 3-5초 길게 누른 뒤 빠른 점멸이 시작된 다음 동글을 연결합니다.</p></article>
-            </div><aside className="callout"><b>Fn 키 위치</b><p>기본 배열 오른쪽 위의 Home 키는 짧게 누르면 Home, 길게 누르면 Fn으로 동작합니다. 설명서의 Fn 조합은 모두 이 키를 길게 누른 상태에서 사용합니다.</p><code>LT(2,KC_HOME)</code></aside></div>
+            </div><aside className="callout"><b>프리셋 적용 후에도 두 경로를 보존합니다</b><p>우측 RF/ST 영역의 BT1·BT2·BT3는 제조사 커스텀 키코드 <code>MD_BLE1/2/3</code>를 직접 실행합니다. 동시에 오른쪽 위 Home 키의 <code>LT(2,KC_HOME)</code>과 Layer 2의 번호키 조합을 복구하므로, 기본 설명서 방식도 사라지지 않습니다.</p><code>BT1 / BT2 / BT3 · Home(Fn) + 1 / 2 / 3</code></aside></div>
           </section>
 
           <section id="keys" className="guide-section">
@@ -87,6 +87,7 @@ export default function GuidePage() {
               <h3>오른쪽 위 Home/Fn 키 변경</h3><p>이 키는 레이어 탭 기능이 포함된 <code>LT(2,KC_HOME)</code>입니다. 전체 코드를 일반 키로 바꾸면 Fn 조합이 사라집니다. 짧게 누르는 기능만 Enter로 바꾸려면 Any에서 두 번째 값만 바꿔 <code>LT(2,KC_ENT)</code>처럼 유지합니다.</p>
               <h3>로고 표시등 세부 설정</h3><p>유선 모드에서 Configure → Lighting → logo로 이동합니다. 밝기는 <code>0-200</code>, 효과 속도는 <code>0-4</code>이며, Effect는 <code>none</code> · <code>wave</code> · <code>fixed wave</code> · <code>spectrum</code> · <code>breathe</code> · <code>light</code> · <code>shutdown</code>을 지원합니다. 단색은 <code>light</code>를 선택한 뒤 Color에서 지정하세요.</p>
               <h3>무선·배터리·절전 키코드</h3><p>VIA의 Custom 항목에는 <code>MD_BLE1/2/3</code>, <code>MD_24G</code>, <code>MD_USB</code>, <code>QK_BAT</code>, <code>QMK_SLEEP</code>가 정의돼 있습니다. Fn 레이어에서 해당 코드를 교체할 때는 먼저 현재 키맵을 백업하세요.</p>
+              <h3>AI PAD 프리셋의 무선 보호 규칙</h3><p><b>프리셋을 기기에 적용</b>하면 선택한 프리셋은 기본 Layer 0에 기록되고, 제조사 무선 Layer 2는 별도로 복구됩니다. 오른쪽 위 Home/Fn, Fn+1/2/3 Bluetooth, Fn+4 2.4GHz, Fn+5 USB, 배터리·절전·초기화 조합과 우측 BT1/2/3 키를 함께 읽어 검증합니다. 적용 도중 오류가 나면 시작 전에 읽어 둔 키맵으로 되돌리기를 시도합니다.</p>
               <div className="resource-row"><a href="https://www.usevia.app/" target="_blank" rel="noreferrer">VIA 실행 ↗</a><a href="https://cloud.luminkey.cn/" target="_blank" rel="noreferrer">LUMINKEY 자료실 ↗</a><a href="https://docs.qmk.fm/keycodes" target="_blank" rel="noreferrer">QMK 키코드 ↗</a></div>
             </div>
           </section>
@@ -106,7 +107,7 @@ export default function GuidePage() {
             <div className="section-number">08</div><div className="section-copy"><p className="guide-eyebrow">IN THE BOX</p><h2>기본 구성품</h2><div className="package-grid">{[['NOVA KINE','1'],['데이터 케이블','1'],['교체 플레이트','3'],['2.4G 수신기','1'],['1U 여분 키캡','6'],['여분 스위치','3'],['T6 드라이버','1'],['여분 나사 세트','1'],['키캡·스위치 풀러','1'],['빠른 시작 안내서','1']].map(([name,count])=><span key={name}><b>{name}</b><em>× {count}</em></span>)}</div></div>
           </section>
 
-          <footer className="guide-footer"><div><strong>KBRAIN AI COMMAND DECK</strong><p>본 페이지는 LUMINKEY NOVA KINE 공식 사용자 설명서를 바탕으로 재구성한 한국어 요약 가이드입니다.</p></div><a href={manualUrl} target="_blank" rel="noreferrer">원본 설명서 확인 ↗</a></footer>
+          <footer className="guide-footer"><div><strong>AI PAD</strong><p>본 페이지는 LUMINKEY NOVA KINE 공식 사용자 설명서를 바탕으로 재구성한 한국어 요약 가이드입니다.</p></div><a href={manualUrl} target="_blank" rel="noreferrer">원본 설명서 확인 ↗</a></footer>
         </article>
       </div>
     </main>

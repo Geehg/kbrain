@@ -5,7 +5,11 @@ import type { ChangeEvent } from 'react';
 import {
   isLkKine,
   LK_KINE_AUXILIARY,
+  LK_KINE_BLUETOOTH_AUX,
+  LK_KINE_FACTORY_WIRELESS_KEYS,
+  LK_KINE_HOME_FN,
   LK_KINE_PROFILE,
+  LK_KINE_WIRELESS_LAYER,
   transformLkKineLayout,
   type MatrixAddress,
   type PlateId,
@@ -45,6 +49,18 @@ const key = (id: string, label: string, kind: ActionType, action: string, prompt
   id, label, glyph: label.slice(0, 2).toUpperCase(), kind, action, prompt, confirm: ['APPROVE', 'STOP', 'DEPLOY', 'MERGE'].includes(label), hud: kind === 'ai' || kind === 'agent', tone,
 });
 
+const protectedBluetoothKeys = (layerId: string) => LK_KINE_BLUETOOTH_AUX.map((control) =>
+  key(`${layerId}-${control.action.toLowerCase()}`, control.label, 'system', control.action, '무선 연결 보호 키'),
+);
+
+const enforceProtectedBluetoothKeys = (layer: Layer): Layer => {
+  const protectedKeys = protectedBluetoothKeys(layer.id);
+  return { ...layer, keys: layer.keys.map((item, index) => index >= 24 && index <= 26 ? protectedKeys[index - 24] : item) };
+};
+
+const homeFnKey = key('protected-home-fn', 'HOME/FN', 'system', 'LT(2,KC_HOME)', 'Bluetooth 및 무선 조합키 보호');
+const protectedActions = new Set(['LT(2,KC_HOME)', ...LK_KINE_BLUETOOTH_AUX.map((control) => control.action)]);
+
 const createDefaultConfig = (): DeckConfig => ({
   version: 1,
   profile: 'Content Studio',
@@ -67,7 +83,7 @@ const createDefaultConfig = (): DeckConfig => ({
       key('ai-19','FIGMA','application','Open Figma'), key('ai-20','ADOBE','application','Open Adobe CC'),
       key('ai-21','VOICE','system','Push to talk'), key('ai-22','FILES','system','Attach files'),
       key('ai-23','CONTEXT','ai','Summarize context'), key('ai-24','SUMMARY','ai','Create handoff summary'),
-      key('ai-25','AI','system','Switch to AI layer'), key('ai-26','DEV','system','Switch to Develop layer'), key('ai-27','DES','system','Switch to Design layer'),
+      ...protectedBluetoothKeys('ai'),
     ]},
     { id: 'dev', name: 'DEVELOP', short: 'DEV', keys: [
       key('dev-01','CODEX','application','Open Codex'), key('dev-02','CLAUDE','application','Open Claude Code'), key('dev-03','GITHUB','application','Open GitHub'), key('dev-04','TERM','application','Open Terminal'),
@@ -76,7 +92,7 @@ const createDefaultConfig = (): DeckConfig => ({
       key('dev-13','COMMIT','macro','Git commit'), key('dev-14','PUSH','macro','Git push'), key('dev-15','PR','macro','Create pull request'), key('dev-16','MERGE','macro','Merge pull request','', 'dark'),
       key('dev-17','SERVER','system','Server status'), key('dev-18','DOCKER','application','Open Docker'), key('dev-19','NAS','application','Open NAS'), key('dev-20','LOGS','system','Tail logs'),
       key('dev-21','UNDO','keyboard','⌘Z'), key('dev-22','COPY','keyboard','⌘C'), key('dev-23','PASTE','keyboard','⌘V'), key('dev-24','SAVE','keyboard','⌘S'),
-      key('dev-25','AI','system','Switch to AI layer'), key('dev-26','DEV','system','Switch to Develop layer'), key('dev-27','DES','system','Switch to Design layer'),
+      ...protectedBluetoothKeys('dev'),
     ]},
     { id: 'design', name: 'DESIGN', short: 'DES', keys: [
       key('des-01','FIGMA','application','Open Figma'), key('des-02','PS','application','Open Photoshop'), key('des-03','ILLUST','application','Open Illustrator'), key('des-04','PREMIERE','application','Open Premiere'),
@@ -85,7 +101,7 @@ const createDefaultConfig = (): DeckConfig => ({
       key('des-13','PROJECT','system','Open project'), key('des-14','NAS','application','Open NAS'), key('des-15','REF','system','Open references'), key('des-16','PROMPTS','system','Open prompt library'),
       key('des-17','UNDO','keyboard','⌘Z'), key('des-18','REDO','keyboard','⇧⌘Z'), key('des-19','COPY','keyboard','⌘C'), key('des-20','PASTE','keyboard','⌘V'),
       key('des-21','ZOOM+','keyboard','⌘+'), key('des-22','ZOOM−','keyboard','⌘-'), key('des-23','FIT','keyboard','⇧1'), key('des-24','SAVE','keyboard','⌘S'),
-      key('des-25','AI','system','Switch to AI layer'), key('des-26','DEV','system','Switch to Develop layer'), key('des-27','DES','system','Switch to Design layer'),
+      ...protectedBluetoothKeys('design'),
     ]},
     { id: 'system', name: 'SYSTEM', short: 'SYS', keys: [
       key('sys-01','FINDER','application','Open Finder'), key('sys-02','BROWSER','application','Open Browser'), key('sys-03','CHATGPT','application','Open ChatGPT'), key('sys-04','CLAUDE','application','Open Claude'),
@@ -94,7 +110,7 @@ const createDefaultConfig = (): DeckConfig => ({
       key('sys-13','CAL','application','Open Calendar'), key('sys-14','MAIL','application','Open Mail'), key('sys-15','NOTES','application','Open Notes'), key('sys-16','SEARCH','keyboard','⌘Space'),
       key('sys-17','DESKTOP','keyboard','F11'), key('sys-18','LOCK','keyboard','⌃⌘Q'), key('sys-19','MIC','system','Toggle microphone'), key('sys-20','FOCUS','system','Toggle Focus'),
       key('sys-21','AI','system','Switch to AI layer'), key('sys-22','DEV','system','Switch to Develop layer'), key('sys-23','DESIGN','system','Switch to Design layer'), key('sys-24','SLEEP','system','Sleep display','', 'dark'),
-      key('sys-25','AI','system','Switch to AI layer'), key('sys-26','DEV','system','Switch to Develop layer'), key('sys-27','DES','system','Switch to Design layer'),
+      ...protectedBluetoothKeys('system'),
     ]},
   ],
   macros: [
@@ -113,7 +129,7 @@ const normalizeConfig = (candidate: DeckConfig): DeckConfig => {
     layers: defaults.layers.map((defaultLayer) => {
       const saved = candidate.layers.find((layer) => layer.id === defaultLayer.id);
       if (!saved) return defaultLayer;
-      return { ...saved, keys: defaultLayer.keys.map((fallback, index) => saved.keys[index] ?? fallback) };
+      return enforceProtectedBluetoothKeys({ ...saved, keys: defaultLayer.keys.map((fallback, index) => saved.keys[index] ?? fallback) });
     }),
   };
 };
@@ -184,6 +200,7 @@ export default function Home() {
 
   const activeLayer = useMemo(() => config.layers.find(layer => layer.id === activeLayerId) ?? config.layers[0], [config, activeLayerId]);
   const selectedIndex = activeLayer.keys.findIndex(item => item.id === selectedKeyId);
+  const protectedSelected = protectedActions.has(draft.action);
   const hardware = config.hardware ?? defaultHardware;
   const physicalLayout = useMemo(() => transformLkKineLayout(hardware.plate, hardware.mirrored, hardware.rotation), [hardware]);
   const pressedKeys = useMemo(() => new Set<MatrixAddress>([...matrixPressed, ...domPressed]), [matrixPressed, domPressed]);
@@ -252,6 +269,7 @@ export default function Home() {
   };
   const selectKey = (item: KeyConfig) => { setSelectedKeyId(item.id); setDraft(item); };
   const saveDraft = () => {
+    if (protectedActions.has(draft.action)) { flash('무선 연결 보호 키는 프리셋에서 변경할 수 없습니다'); return; }
     const next: DeckConfig = { ...config, updatedAt:new Date().toISOString(), layers:config.layers.map(layer => layer.id === activeLayerId ? { ...layer, keys:layer.keys.map(item => item.id === draft.id ? draft : item) } : layer) };
     setConfig(next); localStorage.setItem('kbrain-command-deck-v1', JSON.stringify(next)); flash(`${draft.label} 키를 저장했습니다`);
   };
@@ -330,27 +348,60 @@ export default function Home() {
   const applyPresetToDevice = async () => {
     const client = viaClientRef.current;
     if (!client || deviceState !== 'connected') { setShowDevice(true); flash('먼저 USB-C로 LK-KINE을 연결하세요'); return; }
-    const layerIndex = config.layers.indexOf(activeLayer);
-    const assignments = [
-      ...physicalLayout.cells.map((cell,index) => ({ address:cell.matrix, item:activeLayer.keys[index], index })),
-      ...LK_KINE_AUXILIARY.map((address,index) => ({ address, item:activeLayer.keys[24+index], index:24+index })),
-    ];
-    if (!window.confirm(`${config.profile}의 ${activeLayer.name} 키 ${assignments.length}개를 LK-KINE Layer ${layerIndex}에 기록할까요?`)) return;
-    setKeyTestEnabled(false);
-    setApplyState({status:'applying',done:0,total:assignments.length,message:'VIA 키맵을 기록하고 있습니다'});
+    let layerCount = 0;
     try {
-      const layerCount = await client.getLayerCount();
-      if (layerIndex >= layerCount) throw new Error(`장치 펌웨어는 ${layerCount}개 레이어만 지원합니다.`);
+      layerCount = await client.getLayerCount();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '장치 레이어 정보를 읽지 못했습니다.';
+      setApplyState({status:'error',done:0,total:0,message});
+      flash(message);
+      return;
+    }
+    if (layerCount <= LK_KINE_WIRELESS_LAYER) {
+      const message = `장치 펌웨어에 보호용 Layer ${LK_KINE_WIRELESS_LAYER}가 없습니다.`;
+      setApplyState({status:'error',done:0,total:0,message});
+      flash(message);
+      return;
+    }
+    const targetLayer = 0;
+    const presetAssignments = physicalLayout.cells
+      .map((cell,index) => ({ layer:targetLayer, address:cell.matrix, keycode:qmkKeycodeForAction(activeLayer.keys[index].action, index), label:activeLayer.keys[index].label }))
+      .filter((assignment) => assignment.address !== LK_KINE_HOME_FN.address);
+    const protectedAssignments = [
+      { layer:LK_KINE_HOME_FN.layer, address:LK_KINE_HOME_FN.address, keycode:LK_KINE_HOME_FN.keycode, label:'HOME/FN' },
+      ...LK_KINE_FACTORY_WIRELESS_KEYS.map((control) => ({ layer:LK_KINE_WIRELESS_LAYER, ...control })),
+      ...Array.from({length:layerCount}, (_, layer) => LK_KINE_BLUETOOTH_AUX.map((control) => ({ layer, ...control }))).flat(),
+    ];
+    const assignments = [...presetAssignments, ...protectedAssignments];
+    if (!window.confirm(`${config.profile}의 ${activeLayer.name} 프리셋을 기본 Layer 0에 기록합니다.\n\nHOME/FN, Fn+1/2/3·4·5와 우측 BT1/BT2/BT3 키는 모든 레이어에서 자동 보호됩니다. 계속할까요?`)) return;
+    setKeyTestEnabled(false);
+    setApplyState({status:'applying',done:0,total:assignments.length,message:'현재 키맵을 백업하고 있습니다'});
+    const snapshot = new Map<string, number>();
+    const written: typeof assignments = [];
+    try {
+      for (const assignment of assignments) {
+        snapshot.set(`${assignment.layer}:${assignment.address}`, await client.getKeycode(assignment.layer, assignment.address));
+      }
       for (let index = 0; index < assignments.length; index += 1) {
         const assignment = assignments[index];
-        await client.setKeycode(layerIndex, assignment.address, qmkKeycodeForAction(assignment.item.action, assignment.index));
-        setApplyState({status:'applying',done:index+1,total:assignments.length,message:`M[${assignment.address}] 검증 완료`});
+        const previous = snapshot.get(`${assignment.layer}:${assignment.address}`);
+        if (previous !== assignment.keycode) {
+          await client.setKeycode(assignment.layer, assignment.address, assignment.keycode);
+          written.push(assignment);
+        }
+        setApplyState({status:'applying',done:index+1,total:assignments.length,message:`L${assignment.layer} M[${assignment.address}] ${assignment.label} 검증 완료`});
       }
-      setApplyState({status:'success',done:assignments.length,total:assignments.length,message:`Layer ${layerIndex} 읽기 검증 완료`});
-      flash(`${config.profile} 프리셋을 장치에 적용했습니다`);
+      setApplyState({status:'success',done:assignments.length,total:assignments.length,message:'프리셋 + 무선 보호 키 읽기 검증 완료'});
+      flash(`${config.profile} 적용 완료 · BT1/BT2/BT3 보호됨`);
     } catch (error) {
-      setApplyState({status:'error',done:0,total:assignments.length,message:error instanceof Error ? error.message : '프리셋 적용 실패'});
-      flash(error instanceof Error ? error.message : '프리셋 적용에 실패했습니다');
+      for (const assignment of written.reverse()) {
+        const previous = snapshot.get(`${assignment.layer}:${assignment.address}`);
+        if (previous === undefined) continue;
+        try { await client.setKeycode(assignment.layer, assignment.address, previous); } catch { /* best-effort rollback */ }
+      }
+      const message = error instanceof Error ? `${error.message} · 원래 키맵 복원을 시도했습니다` : '프리셋 적용 실패 · 원래 키맵 복원을 시도했습니다';
+      setApplyState({status:'error',done:0,total:assignments.length,message});
+      flash(message);
     } finally {
       setKeyTestEnabled(true);
     }
@@ -413,33 +464,35 @@ export default function Home() {
             <div className="device-label"><span>NOVA KINE · PLATE {hardware.plate}</span><small>{hardware.rotation===90||hardware.rotation===270?'LANDSCAPE':'PORTRAIT'} · {hardware.mirrored?'RIGHT MIRROR':'LEFT STANDARD'} · {physicalLayout.cells.length} KEYS + 3 AUX + E0</small></div>
             <div className={`device-body rot-${hardware.rotation}`}>
               <div className="key-grid physical-grid" style={{gridTemplateColumns:physicalLayout.gridTemplateColumns,gridTemplateRows:physicalLayout.gridTemplateRows}}>
-                {physicalLayout.cells.map((cell,index) => { const item=activeLayer.keys[index]; const pressed=pressedKeys.has(cell.matrix); const tested=testedKeys.has(cell.matrix); return <button key={`${hardware.plate}-${cell.matrix}`} style={{gridColumn:`${cell.col} / span ${cell.width}`,gridRow:`${cell.row} / span ${cell.height}`}} aria-label={`${item.label} 키 · 매트릭스 ${cell.matrix}`} className={`deck-key ${selectedKeyId === item.id ? 'selected' : ''} ${item.tone ? 'accent-key' : ''} ${pressed?'pressed':''} ${tested?'tested':''} ${(cell.width??1)>1?'wide-key':''} ${(cell.height??1)>1?'tall-key':''} ${cell.section==='function'?'function-key':''}`} onClick={() => selectKey(item)}><span>{item.glyph}</span><strong>{item.label}</strong><small>M[{cell.matrix}]</small></button>; })}
+                {physicalLayout.cells.map((cell,index) => { const isHomeFn=cell.matrix===LK_KINE_HOME_FN.address; const item=isHomeFn?homeFnKey:activeLayer.keys[index]; const pressed=pressedKeys.has(cell.matrix); const tested=testedKeys.has(cell.matrix); return <button key={`${hardware.plate}-${cell.matrix}`} style={{gridColumn:`${cell.col} / span ${cell.width}`,gridRow:`${cell.row} / span ${cell.height}`}} aria-label={`${item.label} 키 · 매트릭스 ${cell.matrix}${isHomeFn?' · 무선 보호':''}`} className={`deck-key ${selectedKeyId === item.id ? 'selected' : ''} ${item.tone ? 'accent-key' : ''} ${pressed?'pressed':''} ${tested?'tested':''} ${(cell.width??1)>1?'wide-key':''} ${(cell.height??1)>1?'tall-key':''} ${cell.section==='function'?'function-key':''} ${isHomeFn?'protected-key':''}`} onClick={() => selectKey(item)}><span>{isHomeFn?'FN':item.glyph}</span><strong>{item.label}</strong><small>{isHomeFn?'L2 HOLD · SAFE':`M[${cell.matrix}]`}</small></button>; })}
               </div>
               <div className="device-controls">
-                <div className="device-screen"><small>NOVA</small><strong>KINE</strong></div>
-                {LK_KINE_AUXILIARY.map((address,index) => { const item=activeLayer.keys[24+index]; const pressed=pressedKeys.has(address); const tested=testedKeys.has(address); return <button key={address} className={`${selectedKeyId===item.id?'selected':''} ${pressed?'pressed':''} ${tested?'tested':''}`} onClick={()=>selectKey(item)}><span>{item.label}</span><small>M[{address}]</small></button>; })}
+                <div className="device-screen"><small>RF / ST · SAFE</small><strong>KINE</strong></div>
+                {LK_KINE_AUXILIARY.map((address,index) => { const item=activeLayer.keys[24+index]; const pressed=pressedKeys.has(address); const tested=testedKeys.has(address); return <button key={address} title={`${item.label} 채널 전환 · 길게 눌러 페어링`} className={`protected-key ${selectedKeyId===item.id?'selected':''} ${pressed?'pressed':''} ${tested?'tested':''}`} onClick={()=>selectKey(item)}><span>{item.label}</span><small>{index===0?'RF / ST':`M[${address}]`}</small></button>; })}
                 <button className="roller" onClick={() => flash('엔코더 e0는 회전 시 지정된 키코드로 검사됩니다')}><span /><small>ENCODER E0</small></button>
                 <div className="device-lights" aria-label="상태 표시등"><i/><i className={deviceState==='connected'?'live':''}/></div>
               </div>
             </div>
             <div className={`test-readout ${keyTestEnabled?'active':''} ${applyState.status}`}><span><i/>{keyTestEnabled ? pressedKeys.size ? `입력 감지 · ${[...pressedKeys].map(value=>`M[${value}]`).join(' ')}` : testSource==='keyboard' ? '브라우저 키 입력 대기 · VIA Matrix 보안 모드' : '실제 키를 눌러 매트릭스를 확인하세요' : '키 테스트 꺼짐'}</span><b>{applyState.message || (deviceState==='connected' ? `VIA ${deviceInfo?.protocol}` : 'USB-C 연결 필요')}</b></div>
           </div></div>
-          <footer className="status-strip"><span><i className={deviceState==='connected'?'live':''} /> {deviceState==='connected'?'LK-KINE VIA 연결됨':'오프라인 설계 모드'}</span><span>{physicalLayout.cells.length} KEYS · 3 AUX · E0</span><span>Matrix 5×12 · Plate {hardware.plate} · {hardware.rotation}°</span><button onClick={checkSync}>{deviceInfo?'키 테스트':'장치 연결'} ↗</button></footer>
+          <footer className="status-strip"><span><i className={deviceState==='connected'?'live':''} /> {deviceState==='connected'?'LK-KINE VIA 연결됨':'오프라인 설계 모드'}</span><span>{physicalLayout.cells.length} KEYS · BT SAFE ×3 · E0</span><span>Matrix 5×12 · Plate {hardware.plate} · {hardware.rotation}°</span><button onClick={checkSync}>{deviceInfo?'키 테스트':'장치 연결'} ↗</button></footer>
         </section>
 
         <aside className="inspector">
           <p className="eyebrow">SELECTED KEY</p>
-          <div className="selected-summary"><span>{draft.glyph}</span><div><strong>{draft.label}</strong><small>Key {String(selectedIndex+1).padStart(2,'0')} · Layer {String(config.layers.indexOf(activeLayer)+1).padStart(2,'0')}</small></div></div>
-          <div className="field-pair"><div><label htmlFor="label">키 라벨</label><input id="label" value={draft.label} onChange={e => setDraft({...draft,label:e.target.value.toUpperCase().slice(0,10)})} /></div><div><label htmlFor="glyph">아이콘</label><input id="glyph" value={draft.glyph} onChange={e => setDraft({...draft,glyph:e.target.value.slice(0,3)})} /></div></div>
-          <label>액션 유형</label>
-          <div className="type-grid">{(Object.keys(typeLabels) as ActionType[]).map(kind => <button key={kind} className={draft.kind===kind?'active':''} onClick={() => setDraft({...draft,kind,action:actionOptions[kind][0]})}>{typeLabels[kind]}</button>)}</div>
-          <label htmlFor="action">실행 액션</label>
-          <select id="action" value={draft.action} onChange={e => setDraft({...draft,action:e.target.value})}>{Array.from(new Set([draft.action,...actionOptions[draft.kind]])).map(option => <option key={option}>{option}</option>)}</select>
-          {(draft.kind==='ai'||draft.kind==='agent') && <><label htmlFor="prompt">지시문</label><textarea id="prompt" value={draft.prompt} placeholder="에이전트에게 전달할 지시문을 입력하세요" onChange={e => setDraft({...draft,prompt:e.target.value})} /></>}
-          {draft.kind==='macro' && <button className="secondary-wide" onClick={() => setShowMacro(true)}>워크플로 매크로 편집 ↗</button>}
-          <div className="toggle-row"><div><strong>실행 전 확인</strong><small>중요 명령의 오작동을 방지합니다</small></div><button aria-label="실행 전 확인" className={`toggle ${draft.confirm?'on':''}`} onClick={() => setDraft({...draft,confirm:!draft.confirm})}><span /></button></div>
-          <div className="toggle-row"><div><strong>HUD에 상태 표시</strong><small>Agent HUD로 진행 상태를 보냅니다</small></div><button aria-label="HUD 상태 표시" className={`toggle ${draft.hud?'on':''}`} onClick={() => setDraft({...draft,hud:!draft.hud})}><span /></button></div>
-          <button className="save-button" onClick={saveDraft}>브라우저에 키 설정 저장</button>
+          <div className="selected-summary"><span>{draft.glyph}</span><div><strong>{draft.label}</strong><small>{protectedSelected?'WIRELESS SAFE · 변경 잠금':`Key ${String(selectedIndex+1).padStart(2,'0')} · Layer ${String(config.layers.indexOf(activeLayer)+1).padStart(2,'0')}`}</small></div></div>
+          {protectedSelected ? <div className="protected-key-note"><b>무선 연결 보호 키</b><p>{draft.action==='LT(2,KC_HOME)'?'짧게 누르면 Home, 길게 누르면 제조사 Layer 2가 열립니다. 이 키를 보존해야 기존 Home + 1/2/3 페어링 조합을 계속 사용할 수 있습니다.':`${draft.label}는 LK-KINE 펌웨어의 ${draft.action} 키코드를 직접 실행합니다. 짧게 눌러 채널을 전환하고 3-5초 길게 눌러 해당 슬롯을 페어링하세요.`}</p><span>모든 프리셋과 장치 레이어에 자동 적용됩니다.</span></div> : <>
+            <div className="field-pair"><div><label htmlFor="label">키 라벨</label><input id="label" value={draft.label} onChange={e => setDraft({...draft,label:e.target.value.toUpperCase().slice(0,10)})} /></div><div><label htmlFor="glyph">아이콘</label><input id="glyph" value={draft.glyph} onChange={e => setDraft({...draft,glyph:e.target.value.slice(0,3)})} /></div></div>
+            <label>액션 유형</label>
+            <div className="type-grid">{(Object.keys(typeLabels) as ActionType[]).map(kind => <button key={kind} className={draft.kind===kind?'active':''} onClick={() => setDraft({...draft,kind,action:actionOptions[kind][0]})}>{typeLabels[kind]}</button>)}</div>
+            <label htmlFor="action">실행 액션</label>
+            <select id="action" value={draft.action} onChange={e => setDraft({...draft,action:e.target.value})}>{Array.from(new Set([draft.action,...actionOptions[draft.kind]])).map(option => <option key={option}>{option}</option>)}</select>
+            {(draft.kind==='ai'||draft.kind==='agent') && <><label htmlFor="prompt">지시문</label><textarea id="prompt" value={draft.prompt} placeholder="에이전트에게 전달할 지시문을 입력하세요" onChange={e => setDraft({...draft,prompt:e.target.value})} /></>}
+            {draft.kind==='macro' && <button className="secondary-wide" onClick={() => setShowMacro(true)}>워크플로 매크로 편집 ↗</button>}
+            <div className="toggle-row"><div><strong>실행 전 확인</strong><small>중요 명령의 오작동을 방지합니다</small></div><button aria-label="실행 전 확인" className={`toggle ${draft.confirm?'on':''}`} onClick={() => setDraft({...draft,confirm:!draft.confirm})}><span /></button></div>
+            <div className="toggle-row"><div><strong>HUD에 상태 표시</strong><small>Agent HUD로 진행 상태를 보냅니다</small></div><button aria-label="HUD 상태 표시" className={`toggle ${draft.hud?'on':''}`} onClick={() => setDraft({...draft,hud:!draft.hud})}><span /></button></div>
+            <button className="save-button" onClick={saveDraft}>브라우저에 키 설정 저장</button>
+          </>}
         </aside>
       </section>
 
@@ -468,7 +521,7 @@ export default function Home() {
             <li className={deviceInfo?'done':''}><b>02</b><div><strong>Raw HID 확인</strong><small>Usage 0xFF60 · 0x61 응답 검증</small></div></li>
             <li className={deviceInfo?'active':''}><b>03</b><div><strong>키 테스트</strong><small>실제 키를 눌러 화면의 M[row,col] 확인</small></div></li>
           </ol>
-          <aside className="protocol-note"><strong>VIA 실시간 연결</strong><p>연결 후 5×12 스위치 매트릭스를 읽어 누른 키를 표시합니다. 프리셋 적용은 현재 플레이트의 실제 좌표만 기록하고, 각 키를 다시 읽어 같은 키코드인지 검증합니다.</p></aside>
+          <aside className="protocol-note"><strong>안전 적용 방식</strong><p>프리셋은 기본 Layer 0에만 기록합니다. 적용 전 현재 키맵을 백업하고, Home/Fn과 제조사 Layer 2 조합키를 복구한 뒤 우측 RF/ST 영역의 BT1·BT2·BT3를 모든 레이어에 고정합니다. 기록 실패 시 기존 키맵 복원을 시도합니다.</p></aside>
           <footer><span>{deviceInfo?`VIA ${deviceInfo.protocol} · Key Test ready`:'Configuration stays local'}</span><button onClick={() => { setShowDevice(false); checkSync(); }} disabled={!deviceInfo}>키 테스트 시작</button></footer>
         </section>
       </div>}

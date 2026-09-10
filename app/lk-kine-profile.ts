@@ -65,6 +65,58 @@ export const LK_KINE_PLATES: Record<PlateId, PhysicalKey[]> = {
 
 export const LK_KINE_AUXILIARY = ['4,9', '4,10', '4,11'] as const;
 
+// VIA customKeycodes are assigned in JSON order from QK_KB_0 (0x7E00).
+// These values are implemented by the LK-KINE firmware; the site only writes
+// them into the dynamic keymap.
+export const LK_KINE_CUSTOM_KEYCODES = {
+  MD_24G: 0x7e00,
+  MD_BLE1: 0x7e01,
+  MD_BLE2: 0x7e02,
+  MD_BLE3: 0x7e03,
+  MD_USB: 0x7e04,
+  U_EE_CLR: 0x7e05,
+  QK_BAT: 0x7e06,
+  QMK_SLEEP: 0x7e07,
+  LG_TOG: 0x7e08,
+  LG_MOD: 0x7e09,
+  LG_RMOD: 0x7e0a,
+  LG_HUI: 0x7e0b,
+  LG_HUD: 0x7e0c,
+  LG_SAI: 0x7e0d,
+  LG_SAD: 0x7e0e,
+  LG_VAI: 0x7e0f,
+  LG_VAD: 0x7e10,
+  LG_SPI: 0x7e11,
+  LG_SPD: 0x7e12,
+} as const;
+
+export const LK_KINE_HOME_FN = {
+  address: '3,0' as MatrixAddress,
+  layer: 0,
+  keycode: 0x424a, // LT(2, KC_HOME)
+} as const;
+
+export const LK_KINE_WIRELESS_LAYER = 2;
+
+export const LK_KINE_BLUETOOTH_AUX = [
+  { address: '4,9' as MatrixAddress, label: 'BT1', action: 'MD_BLE1', keycode: LK_KINE_CUSTOM_KEYCODES.MD_BLE1 },
+  { address: '4,10' as MatrixAddress, label: 'BT2', action: 'MD_BLE2', keycode: LK_KINE_CUSTOM_KEYCODES.MD_BLE2 },
+  { address: '4,11' as MatrixAddress, label: 'BT3', action: 'MD_BLE3', keycode: LK_KINE_CUSTOM_KEYCODES.MD_BLE3 },
+] as const;
+
+// Factory Home/Fn combinations from the official manual. Keeping these on
+// layer 2 means the original pairing path survives every AI PAD preset.
+export const LK_KINE_FACTORY_WIRELESS_KEYS = [
+  { address: '0,6' as MatrixAddress, label: 'BT1', keycode: LK_KINE_CUSTOM_KEYCODES.MD_BLE1 },
+  { address: '1,6' as MatrixAddress, label: 'BT2', keycode: LK_KINE_CUSTOM_KEYCODES.MD_BLE2 },
+  { address: '2,6' as MatrixAddress, label: 'BT3', keycode: LK_KINE_CUSTOM_KEYCODES.MD_BLE3 },
+  { address: '0,4' as MatrixAddress, label: '2.4G', keycode: LK_KINE_CUSTOM_KEYCODES.MD_24G },
+  { address: '1,4' as MatrixAddress, label: 'USB', keycode: LK_KINE_CUSTOM_KEYCODES.MD_USB },
+  { address: '1,0' as MatrixAddress, label: 'SLEEP', keycode: LK_KINE_CUSTOM_KEYCODES.QMK_SLEEP },
+  { address: '2,0' as MatrixAddress, label: 'BAT', keycode: LK_KINE_CUSTOM_KEYCODES.QK_BAT },
+  { address: '0,0' as MatrixAddress, label: 'RESET', keycode: LK_KINE_CUSTOM_KEYCODES.U_EE_CLR },
+] as const;
+
 export const LK_KINE_PROFILE = {
   name: 'LK-KINE',
   vendorId: 0x36b0,

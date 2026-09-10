@@ -28,9 +28,10 @@ const modeInfo:Record<Mode,{label:string;color:string;steps:{title:string;copy:s
   ]},
   bluetooth:{ label:'Bluetooth', color:'blue', steps:[
     {title:'케이블을 빼고 후면 전원을 켜세요',copy:'뒷면 전원 스위치를 ON으로 옮깁니다. 최초 연결 시 빠른 점멸은 정상입니다.'},
-    {title:'Home(Fn) + 슬롯 키를 길게 누르세요',copy:'Home을 누른 채 선택한 1·2·3 키를 3-5초 유지합니다. VIA 코드는 MD_BLE1/2/3입니다.',keys:['home','slot']},
+    {title:'우측 BT 슬롯 키를 길게 누르세요',copy:'AI PAD 프리셋 적용 후 우측 RF/ST 영역의 BT1·BT2·BT3 중 원하는 슬롯을 3-5초 유지합니다.',keys:['bt-slot']},
     {title:'빠른 점멸을 기다리세요',copy:'표시등이 빠르게 깜빡이면 페어링 검색 준비가 완료된 것입니다.',signal:'blue'},
     {title:'컴퓨터에서 장치를 선택하세요',copy:'Bluetooth 목록에서 LK-KINE-BT1/2/3 중 선택한 슬롯과 같은 이름을 연결합니다.',signal:'blue'},
+    {title:'반응이 없으면 기본 조합을 사용하세요',copy:'Home을 누른 채 같은 번호 1·2·3을 3-5초 유지합니다. 이 제조사 조합도 프리셋 적용 시 함께 복구됩니다.',keys:['home','slot']},
   ]},
   receiver:{ label:'2.4GHz 동글', color:'green', steps:[
     {title:'케이블을 빼고 전원을 켜세요',copy:'2.4GHz 무선 사용 전 후면 스위치가 ON인지 확인합니다.'},
@@ -50,7 +51,7 @@ function KeypadDiagram({ activeKeys=[], signal='off', compact=false }:{ activeKe
     </div>
     <div className="nk-side-module">
       <div className="nk-screen"><small>NOVA</small><b>KINE</b></div>
-      <span className="nk-side-key"/><span className="nk-side-key"/><span className="nk-side-key"/>
+      {['bt1','bt2','bt3'].map((id,index)=><span key={id} className={`nk-side-key ${activeKeys.includes(id)?'is-active':''}`}><b>BT{index+1}</b></span>)}
       <div className="nk-roller"><i/></div>
       <div className="nk-indicators"><i className={signal}/><i className={signal}/></div>
     </div>
@@ -72,7 +73,7 @@ export function HardwareMap() {
     ['03','숫자 1·2·3','Bluetooth 슬롯 1·2·3 페어링'],
     ['04','숫자 4·5','2.4GHz 모드 · USB 모드 전환'],
     ['05','표시등','연결 모드, 페어링, 배터리 상태 안내'],
-    ['06','보조키 3개·롤러','Matrix 4,9-11 · encoder e0 반응 확인'],
+    ['06','RF/ST 보조키 3개','BT1·BT2·BT3를 모든 프리셋에서 보호'],
   ];
   return <div className="hardware-map">
     <div className="hardware-stage"><KeypadDiagram activeKeys={['print','home','1','2','3','4','5']} signal="blue"/></div>
@@ -94,7 +95,7 @@ export function PairingCoach() {
     return ()=>window.clearTimeout(timer);
   },[step,playing,info.steps.length]);
   const current=info.steps[step];
-  const activeKeys=(current.keys??[]).map(key=>key==='slot'?slot:key);
+  const activeKeys=(current.keys??[]).map(key=>key==='slot'?slot:key==='bt-slot'?`bt${slot}`:key);
   return <div className={`pairing-coach mode-${info.color}`}>
     <div className="pairing-tabs" role="tablist" aria-label="연결 방식 선택">
       {(Object.keys(modeInfo) as Mode[]).map(id=><button key={id} role="tab" aria-selected={mode===id} className={mode===id?'active':''} onClick={()=>chooseMode(id)}><i/>{modeInfo[id].label}</button>)}

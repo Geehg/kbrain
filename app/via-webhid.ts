@@ -1,4 +1,4 @@
-import { LK_KINE_PROFILE, type MatrixAddress } from './lk-kine-profile';
+import { LK_KINE_CUSTOM_KEYCODES, LK_KINE_PROFILE, type MatrixAddress } from './lk-kine-profile';
 
 export type HidCollectionInfo = { usagePage?: number; usage?: number };
 export type HidInputReportEvent = Event & { data: DataView; reportId: number };
@@ -116,6 +116,7 @@ const BASIC_KEYCODES: Record<string, number> = {
   '⇧⌘4': 0x0a21,
   '⌘Space': 0x082c,
   F11: 0x44,
+  ...LK_KINE_CUSTOM_KEYCODES,
 };
 
 export const qmkKeycodeForAction = (action: string, physicalIndex: number) => {
