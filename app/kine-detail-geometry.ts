@@ -47,7 +47,10 @@ export function frostDishGeometry(w: number, d: number) {
   const profile = [[0, 23.42], [.3, 23.42], [.58, 23.45], [.76, 23.57], [.87, 23.88], [.95, 24.12], [1, 24.07], [1.015, 23.86], [1.015, 23.35]];
   const positions: number[] = [], normals: number[] = [], uv: number[] = [], indices: number[] = [], segments = 80;
   for (const [i, [fraction, height]] of profile.entries()) for (let j = 0; j <= segments; j++) {
-    const angle = j / segments * Math.PI * 2, c = Math.cos(angle), s = Math.sin(angle);
+    // Reuse the first angle for the seam vertex. sin(2π) is a tiny negative
+    // number, not zero: Math.sign would shift Z-long caps by the full straight
+    // section and leave the final triangle strip open (FIGMA / APPROVE).
+    const angle = j === segments ? 0 : j / segments * Math.PI * 2, c = Math.cos(angle), s = Math.sin(angle);
     const x = (c * radius + Math.sign(c) * ex) * fraction;
     const z = (s * radius + Math.sign(s) * ez) * fraction;
     positions.push(x, height, z); uv.push(x / w + .5, z / d + .5);

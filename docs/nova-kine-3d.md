@@ -16,6 +16,8 @@ This is a parametric visual reconstruction, not manufacturer CAD. Pitch, radii, 
 
 The owner's close-up product photograph informs the fine bead-blasted finish, raised surround chamfer and dark seam, deeply seated roller with 88 axial grooves and dark end faces, and bored indicator apertures with recessed flat/frosted lenses. Side buttons extend to the outer edge above an actual undercut and have shallow edge-open finger pockets with solid metal floors. Frost keycaps use tapered smoky skirts, shallow dished circle/stadium surfaces, rounded lips and softened clover-shaped stem outlines beneath a translucent surface. The photograph does not establish machining tolerances, exact groove count or actual LED state; these remain visual approximations. Existing key addresses and device-writing behavior are unchanged.
 
+The cap contour's final angular sample explicitly reuses its first angle. Evaluating `sin(2π)` separately produces a negative rounding residue; using its sign for stadium extension used to leave a triangular seam gap on Z-long caps (FIGMA/APPROVE). Regression checks compare each contour's seam positions, normals and UVs and raycast a dense grid across square, X-long and Z-long cap surfaces.
+
 ### LED light study
 
 The recessed lenses use emissive material, additive surface halos and local point lights; these rotate with the case and remain occluded from the back. An LED close-up frames the roller/indicator corner. The editor offers brightness, light-spill and pause controls. Animated previews stop flashing under reduced motion and do not keep rendering when offscreen. The fast example is 2.5 Hz, not a claimed firmware cadence.

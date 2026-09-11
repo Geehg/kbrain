@@ -21,6 +21,28 @@ async function sourceModule(name) {
 const { kineKeyPlacements, KINE_SIZE } = await import(await sourceModule('kine-geometry'));
 const { LK_KINE_PLATES, transformLkKineLayout } = await import(await sourceModule('lk-kine-profile'));
 const { createKineModel, disposeModel } = await import(await sourceModule('kine-model'));
+const { frostDishGeometry } = await import(await sourceModule('kine-detail-geometry'));
+// Regress the FIGMA/APPROVE triangular gap: every contour must close exactly,
+// including 2u caps along either intrinsic axis, before orientation is applied.
+for (const [width, depth] of [[14.3, 14.3], [33.6, 14.3], [14.3, 33.6]]) {
+  const geometry = frostDishGeometry(width, depth);
+  for (const name of ['position', 'normal', 'uv']) {
+    const attribute = geometry.getAttribute(name);
+    for (let ring = 0; ring < 9; ring++) for (let component = 0; component < attribute.itemSize; component++) {
+      const first = attribute.array[(ring * 81) * attribute.itemSize + component], last = attribute.array[(ring * 81 + 80) * attribute.itemSize + component];
+      assert.ok(Math.abs(first - last) < 1e-6, `${width}x${depth}: ${name} ring ${ring} has an open seam (${first} vs ${last})`);
+    }
+  }
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+  const radius = Math.min(width, depth) / 2, ex = width / 2 - radius, ez = depth / 2 - radius;
+  for (let ix = -18; ix <= 18; ix++) for (let iz = -18; iz <= 18; iz++) {
+    const x = ix / 18 * width / 2, z = iz / 18 * depth / 2;
+    if (Math.hypot(Math.max(Math.abs(x) - ex, 0), Math.max(Math.abs(z) - ez, 0)) >= radius * .94) continue;
+    const hit = new THREE.Raycaster(new THREE.Vector3(x, 100, z), new THREE.Vector3(0, -1, 0)).intersectObject(mesh)[0];
+    assert.ok(hit, `${width}x${depth}: missing cap surface at ${x},${z}`);
+  }
+  geometry.dispose(); mesh.material.dispose();
+}
 const { DEFAULT_LED_SETTINGS, LED_SCENARIOS, resolveKineLeds, ledLevel } = await import(await sourceModule('kine-led'));
 const automatic = connected => resolveKineLeds(DEFAULT_LED_SETTINGS, connected);
 assert.deepEqual(automatic(false).signals.map(s => s.pattern), ['off', 'off']);
