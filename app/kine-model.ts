@@ -213,8 +213,37 @@ export function createKineModel(plate: PlateId, mirrored: boolean, keys: ModelKe
   addBox(port, 10.4, 4.4, .55, 0, 0, 0, bevelMetal, .25);
   addBox(port, 8.8, 3, .65, 0, 0, -.3, dark, .3);
   addBox(port, 5.8, .65, .7, 0, 0, -.65, metal, .25);
+  // Keep the trailing cable out of auto-framing: a hidden accessory must never
+  // shrink the device, and its free end is allowed to leave the product viewport.
+  const framingBounds = new THREE.Box3().setFromObject(root);
+  const cable = new THREE.Group(); cable.name = 'connected-usb-cable';
+  cable.position.copy(port.position); cable.userData.part = 'usb'; cable.visible = false;
+  root.add(cable);
+  const jacket = new THREE.MeshStandardMaterial({ color: '#202528', roughness: .72, metalness: .03 });
+  const moulding = new THREE.MeshStandardMaterial({ color: '#353a3b', roughness: .56, metalness: .08 });
+  const plugMetal = new THREE.MeshStandardMaterial({ color: '#bfc8ce', roughness: .25, metalness: .94 });
+  // Most of the USB-C metal shell is inside the receptacle; only the lip shows.
+  addBox(cable, 8.25, 2.65, 1.8, 0, 0, -.55, plugMetal, .8).name = 'usb-plug-lip';
+  addBox(cable, 10.6, 6.1, 16.8, 0, 0, -9.6, jacket, 1.4).name = 'usb-plug-housing';
+  addBox(cable, 10.64, .18, 14.5, 0, -.1, -9.9, moulding, .08);
+  addBox(cable, 8.9, .18, 9.3, 0, 3.05, -10.1, moulding, .08);
+  addLabel(cable, ['USB-C'], 5.4, 2.3, 0, 3.16, -10.1);
+  const relief = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.8, 10, 32), jacket);
+  relief.rotation.x = -Math.PI / 2; relief.position.z = -22; relief.castShadow = true; relief.receiveShadow = true; cable.add(relief);
+  for (let i = 0; i < 6; i++) {
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(2.65 - i * .07, .2, 8, 32), moulding);
+    collar.position.z = -18.6 - i * 1.25; collar.castShadow = true; cable.add(collar);
+  }
+  const leadCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0, -26), new THREE.Vector3(0, -.15, -34),
+    new THREE.Vector3(-3, -2, -48), new THREE.Vector3(-17, -5.6, -65),
+    new THREE.Vector3(-43, -5.6, -72), new THREE.Vector3(-72, -5.6, -91),
+    new THREE.Vector3(-190, -5.6, -135), new THREE.Vector3(-410, -5.6, -170),
+  ]);
+  const lead = new THREE.Mesh(new THREE.TubeGeometry(leadCurve, 192, 2.1, 16, false), jacket);
+  lead.name = 'usb-flexible-lead'; lead.castShadow = true; lead.receiveShadow = true; cable.add(lead);
   root.traverse(object => {
     if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshStandardMaterial && object.material.bumpMap === grain) machinedUV(object.geometry);
   });
-  return { root, keyMeshes, rollerGroup, switchThumb, ledMaterials, ledLights, ledHalos };
+  return { root, keyMeshes, rollerGroup, switchThumb, ledMaterials, ledLights, ledHalos, cable, framingBounds };
 }

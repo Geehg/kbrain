@@ -86,6 +86,13 @@ for (const plate of ['A', 'B', 'C', 'D']) for (const mirrored of [false, true]) 
   }
   const keys = placements.map(k => ({ id: k.matrix, matrix: k.matrix, label: k.matrix, glyph: 'NK', protected: false }));
   const model = createKineModel(plate, mirrored, keys, 'silver');
+  assert.equal(model.cable.visible, false, 'No cable before USB confirmation');
+  assert.equal(model.cable.position.z, -KINE_SIZE.depth / 2 - .15, 'Cable is anchored to the actual rear USB port');
+  const cableBounds = new THREE.Box3().setFromObject(model.cable);
+  assert.ok(cableBounds.max.z < -KINE_SIZE.depth / 2 + 1, 'Cable cannot pass through the keys or case');
+  assert.ok(cableBounds.min.y > 0, 'Flexible jacket must not dip below the base plane');
+  assert.ok(model.framingBounds.min.z > cableBounds.min.z + 60, 'Free cable tail must not shrink the default camera fit');
+  model.cable.visible = true;
   model.keyMeshes.forEach(k => { k.label.visible = false; });
   model.root.updateMatrixWorld(true);
   const surfaceAt = (x, z) => new THREE.Raycaster(new THREE.Vector3(x, 100, z), new THREE.Vector3(0, -1, 0))
@@ -120,6 +127,9 @@ for (const plate of ['A', 'B', 'C', 'D']) for (const mirrored of [false, true]) 
     const twoD = transformLkKineLayout(plate, mirrored, rotation).cells;
     assert.deepEqual(twoD.map(k => k.matrix), placements.filter(k => !k.auxiliary).map(k => k.matrix));
     model.root.rotation.y = -rotation * Math.PI / 180; model.root.updateMatrixWorld(true);
+    const cableOrigin = model.cable.getWorldPosition(new THREE.Vector3());
+    const expectedOrigin = new THREE.Vector3(-11.4, 8, -KINE_SIZE.depth / 2 - .15).applyMatrix4(model.root.matrixWorld);
+    assert.ok(cableOrigin.distanceTo(expectedOrigin) < 1e-7, 'Cable stays attached through every plate/mirror/rotation');
     // Key centers must be selectable from above after every orientation change.
     for (const key of model.keyMeshes) {
       const position = key.group.getWorldPosition(new THREE.Vector3()); position.y = 100;
@@ -138,4 +148,4 @@ for (const plate of ['A', 'B', 'C', 'D']) for (const mirrored of [false, true]) 
   }
   disposeModel(model.root);
 }
-console.log(`PASS: ${configurations} plate/mirror/rotation combinations; matrix identity, bounds, non-overlap, selection/occlusion, recessed LED/roller/pocket geometry; all 10 LED scenarios, USB connect/disconnect, battery colors/counts, blink phases and reduced motion.`);
+console.log(`PASS: ${configurations} plate/mirror/rotation combinations; cable attachment/clearance/framing; key matrix identity, bounds, non-overlap, selection/occlusion, recessed LED/roller/pocket geometry; all 10 LED scenarios, USB connect/disconnect, battery colors/counts, blink phases and reduced motion.`);

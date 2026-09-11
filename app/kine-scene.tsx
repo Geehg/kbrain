@@ -103,6 +103,8 @@ export default function KineScene(props: Props) {
       const sync = (p: Props, showLabels: boolean) => {
         labelsVisible = showLabels;
         model.root.rotation.y = -p.rotation * Math.PI / 180;
+        // Actual WebHID connection only; LED example modes never attach a cable.
+        model.cable.visible = p.connected;
         // Turn virtual labels upright after a physical orientation change.
         for (const key of model.keyMeshes) {
           key.label.rotation.set(-Math.PI / 2, 0, p.rotation * Math.PI / 180);
@@ -125,7 +127,10 @@ export default function KineScene(props: Props) {
         if (next === 'left' || next === 'right' || next === 'ports' || next === 'leds') targetPosition.applyAxisAngle(new THREE.Vector3(0, 1, 0), model.root.rotation.y);
         targetFocus.set(0, 10, 0);
         // Fit the actual rotated case bounds, including its depth in perspective.
-        const bounds = new THREE.Box3().setFromObject(model.root);
+        model.root.updateMatrixWorld(true);
+        const bounds = model.framingBounds.clone();
+        if (model.cable.visible) bounds.expandByPoint(model.cable.position.clone().add(new THREE.Vector3(0, 4, -28)));
+        bounds.applyMatrix4(model.root.matrixWorld);
         const right = new THREE.Vector3(0, 1, 0).cross(targetPosition).normalize();
         const up = targetPosition.clone().cross(right).normalize();
         let distance = controls.minDistance;
@@ -147,7 +152,10 @@ export default function KineScene(props: Props) {
         pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1);
         raycaster.setFromCamera(pointer, camera);
         // Stop at the first visible surface: never select front keys through the back.
-        const intersection = raycaster.intersectObject(model.root, true).find(h => h.object.visible);
+        const intersection = raycaster.intersectObject(model.root, true).find(h => {
+          for (let object: typeof h.object | null = h.object; object; object = object.parent) if (!object.visible) return false;
+          return true;
+        });
         let object = intersection?.object;
         while (object && object !== model.root) {
           if (object.userData.keyId || object.userData.part) return object.userData;
@@ -283,13 +291,13 @@ export default function KineScene(props: Props) {
   return <section className="kine-viewer" aria-label="NOVA KINE 3D 편집기">
     <div className="kine-viewbar"><div className="kine-view-presets" aria-label="3D 시점">{views.map(([id, label]) => <button key={id} aria-pressed={view === id} disabled={!ready || !!error} onClick={() => selectView(id)}>{label}</button>)}</div><button className="kine-reset" disabled={!ready || !!error} onClick={() => selectView('perspective')} title="처음 시점으로">↺ <span>시점 초기화</span></button></div>
     <div className="kine-canvas-wrap">
-      <div className="kine-stage-heading"><b>NOVA KINE</b><span>360° PRODUCT VIEW</span></div>
+      <div className="kine-stage-heading"><b>NOVA KINE</b><span>360° PRODUCT VIEW</span><span className={`kine-cable-status ${props.connected ? 'connected' : ''}`} role="status">{props.connected ? 'USB 모드 · 연결 확인됨' : 'USB-C 연결 확인 전'}</span></div>
       <div ref={mountRef} className="kine-canvas" />
       {!ready && !error && <div className="kine-loading" role="status">3D 모델을 준비하고 있습니다…</div>}
       {error && <div className="kine-error" role="alert"><p>{error}</p><button onClick={props.onFallback}>2D 편집으로 전환</button></div>}
       <div className="kine-zoom"><button aria-label="3D 확대" disabled={!ready || !!error} onClick={() => apiRef.current?.zoom(.87)}>＋</button><button aria-label="3D 축소" disabled={!ready || !!error} onClick={() => apiRef.current?.zoom(1.15)}>−</button></div>
       <div className="kine-stage-caption"><span>드래그 회전 · 휠/핀치 확대 · 키 클릭 선택</span><b>{props.plate} / {props.rotation}°</b></div>
-      {part && <aside className="kine-part-info" aria-live="polite"><button className="kine-info-close" aria-label="부품 안내 닫기" onClick={() => setPart(null)}>×</button><strong>{parts[part].title}</strong><p>{parts[part].copy}</p>{part === 'power' && <button className="kine-power" aria-pressed={powerOn} onClick={() => setPowerOn(value => !value)}>모형 스위치 {powerOn ? 'ON' : 'OFF'}</button>}</aside>}
+      {part && <aside className="kine-part-info" aria-live="polite"><button className="kine-info-close" aria-label="부품 안내 닫기" onClick={() => setPart(null)}>×</button><strong>{parts[part].title}</strong><p>{parts[part].copy}</p>{part === 'usb' && <p>{props.connected ? '설정 사이트가 장치 응답을 확인해 케이블을 표시합니다. 연결을 해제하면 사라집니다.' : '케이블을 꽂은 뒤 사이트의 「장치 연결」을 완료하면 모형에도 표시됩니다. LED 예시 선택과는 별개입니다.'}</p>}{part === 'power' && <button className="kine-power" aria-pressed={powerOn} onClick={() => setPowerOn(value => !value)}>모형 스위치 {powerOn ? 'ON' : 'OFF'}</button>}</aside>}
     </div>
     <div className="kine-options"><div className="kine-finishes" aria-label="모형 케이스 색상"><span>케이스</span>{([['silver', '실버'], ['gray', '그레이'], ['black', '블랙']] as [Finish, string][]).map(([id, name]) => <button key={id} aria-label={name} title={name} aria-pressed={finish === id} onClick={() => setFinish(id)}><i className={`finish-${id}`} /></button>)}</div><label><input type="checkbox" checked={labels} onChange={e => setLabels(e.target.checked)} />키 이름</label><label><input type="checkbox" checked={spinning} disabled={!ready || !!error} onChange={e => { setSpinning(e.target.checked); apiRef.current?.spin(e.target.checked); }} />자동 회전</label></div>
     <div className="kine-part-links" aria-label="부품 살펴보기"><button onClick={() => { selectView('bottom'); setPart('power'); }}>전원 스위치</button><button onClick={() => { selectView('ports'); setPart('usb'); }}>USB-C</button><button onClick={() => { selectView('top'); setPart('antenna'); }}>안테나</button><button onClick={() => { selectView('leds'); setPart('leds'); }}>표시등</button></div>

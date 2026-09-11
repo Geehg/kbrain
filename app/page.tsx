@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import KineScene from './kine-scene';
+import { useKeySound } from './use-key-sound';
 import {
   isLkKine,
   LK_KINE_AUXILIARY,
@@ -161,6 +162,7 @@ const defaultInputMatrix: Record<string, MatrixAddress> = {
 };
 
 export default function Home() {
+  const keySound = useKeySound();
   const [config, setConfig] = useState<DeckConfig>(createDefaultConfig);
   const [activeLayerId, setActiveLayerId] = useState('ai');
   const [selectedKeyId, setSelectedKeyId] = useState('ai-01');
@@ -294,6 +296,7 @@ export default function Home() {
     setActiveLayerId(next.id); setSelectedKeyId(next.keys[0].id); setDraft(next.keys[0]);
   };
   const selectKey = (item: KeyConfig) => { setSelectedKeyId(item.id); setDraft(item); };
+  const clickKey = (item: KeyConfig) => { keySound.play(); selectKey(item); };
   const saveDraft = () => {
     if (protectedActions.has(draft.action)) { flash('무선 연결 보호 키는 프리셋에서 변경할 수 없습니다'); return; }
     const next: DeckConfig = { ...config, updatedAt:new Date().toISOString(), layers:config.layers.map(layer => layer.id === activeLayerId ? { ...layer, keys:layer.keys.map(item => item.id === draft.id ? draft : item) } : layer) };
@@ -486,16 +489,19 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="device-view-switch" aria-label="키패드 표시 방식"><button aria-pressed={deviceView==='3d'} onClick={() => setDeviceView('3d')}>3D 제품 보기</button><button aria-pressed={deviceView==='2d'} onClick={() => setDeviceView('2d')}>2D 키맵</button></div>
+          <div className="device-view-switch" aria-label="키패드 표시 방식">
+            <div className="key-sound-controls"><label title="화면의 키를 클릭할 때 합성 기계식 키음 재생"><input type="checkbox" checked={keySound.enabled} onChange={e => keySound.toggle(e.target.checked)} />키음</label><label className="key-sound-volume">음량<input type="range" aria-label="키음 음량" min="0" max="100" step="5" value={keySound.volume} disabled={!keySound.enabled} onChange={e => keySound.changeVolume(Number(e.target.value))} /><output>{keySound.volume}%</output></label>{keySound.unavailable && <small role="status">브라우저의 소리 재생 권한을 확인하세요</small>}</div>
+            <button aria-pressed={deviceView==='3d'} onClick={() => setDeviceView('3d')}>3D 제품 보기</button><button aria-pressed={deviceView==='2d'} onClick={() => setDeviceView('2d')}>2D 키맵</button>
+          </div>
           <div className="device-stage"><div>
             <div className="device-label"><span>NOVA KINE · PLATE {hardware.plate}</span><small>{hardware.rotation===90||hardware.rotation===270?'LANDSCAPE':'PORTRAIT'} · {hardware.mirrored?'RIGHT MIRROR':'LEFT STANDARD'} · {physicalLayout.cells.length} KEYS + 3 AUX + E0</small></div>
-            {deviceView==='3d' ? <KineScene plate={hardware.plate} mirrored={hardware.mirrored} rotation={hardware.rotation} keys={modelKeys} selectedId={selectedKeyId} pressed={pressedKeys} tested={testedKeys} connected={deviceState==='connected'} onSelect={id => { const item=id===homeFnKey.id?homeFnKey:activeLayer.keys.find(key=>key.id===id); if(item) selectKey(item); }} onFallback={() => setDeviceView('2d')} /> : <div className={`device-body rot-${hardware.rotation}`}>
+            {deviceView==='3d' ? <KineScene plate={hardware.plate} mirrored={hardware.mirrored} rotation={hardware.rotation} keys={modelKeys} selectedId={selectedKeyId} pressed={pressedKeys} tested={testedKeys} connected={deviceState==='connected' && hardware.connectionMode==='usb'} onSelect={id => { const item=id===homeFnKey.id?homeFnKey:activeLayer.keys.find(key=>key.id===id); if(item) clickKey(item); }} onFallback={() => setDeviceView('2d')} /> : <div className={`device-body rot-${hardware.rotation}`}>
               <div className="key-grid physical-grid" style={{gridTemplateColumns:physicalLayout.gridTemplateColumns,gridTemplateRows:physicalLayout.gridTemplateRows}}>
-                {physicalLayout.cells.map((cell,index) => { const isHomeFn=cell.matrix===LK_KINE_HOME_FN.address; const item=isHomeFn?homeFnKey:activeLayer.keys[index]; const pressed=pressedKeys.has(cell.matrix); const tested=testedKeys.has(cell.matrix); return <button key={`${hardware.plate}-${cell.matrix}`} style={{gridColumn:`${cell.col} / span ${cell.width}`,gridRow:`${cell.row} / span ${cell.height}`}} aria-label={`${item.label} 키 · 매트릭스 ${cell.matrix}${isHomeFn?' · 무선 보호':''}`} className={`deck-key ${selectedKeyId === item.id ? 'selected' : ''} ${item.tone ? 'accent-key' : ''} ${pressed?'pressed':''} ${tested?'tested':''} ${(cell.width??1)>1?'wide-key':''} ${(cell.height??1)>1?'tall-key':''} ${cell.section==='function'?'function-key':''} ${isHomeFn?'protected-key':''}`} onClick={() => selectKey(item)}><span>{isHomeFn?'FN':item.glyph}</span><strong>{item.label}</strong><small>{isHomeFn?'L2 HOLD · SAFE':`M[${cell.matrix}]`}</small></button>; })}
+                {physicalLayout.cells.map((cell,index) => { const isHomeFn=cell.matrix===LK_KINE_HOME_FN.address; const item=isHomeFn?homeFnKey:activeLayer.keys[index]; const pressed=pressedKeys.has(cell.matrix); const tested=testedKeys.has(cell.matrix); return <button key={`${hardware.plate}-${cell.matrix}`} style={{gridColumn:`${cell.col} / span ${cell.width}`,gridRow:`${cell.row} / span ${cell.height}`}} aria-label={`${item.label} 키 · 매트릭스 ${cell.matrix}${isHomeFn?' · 무선 보호':''}`} className={`deck-key ${selectedKeyId === item.id ? 'selected' : ''} ${item.tone ? 'accent-key' : ''} ${pressed?'pressed':''} ${tested?'tested':''} ${(cell.width??1)>1?'wide-key':''} ${(cell.height??1)>1?'tall-key':''} ${cell.section==='function'?'function-key':''} ${isHomeFn?'protected-key':''}`} onClick={() => clickKey(item)}><span>{isHomeFn?'FN':item.glyph}</span><strong>{item.label}</strong><small>{isHomeFn?'L2 HOLD · SAFE':`M[${cell.matrix}]`}</small></button>; })}
               </div>
               <div className="device-controls">
                 <div className="device-screen" title="반투명 무선 안테나 구획 · 화면이 아닙니다"><small>RF ANTENNA</small><strong>KINE</strong></div>
-                {LK_KINE_AUXILIARY.map((address,index) => { const item=activeLayer.keys[24+index]; const pressed=pressedKeys.has(address); const tested=testedKeys.has(address); return <button key={address} title={`${item.label} 채널 전환 · 길게 눌러 페어링`} className={`protected-key ${selectedKeyId===item.id?'selected':''} ${pressed?'pressed':''} ${tested?'tested':''}`} onClick={()=>selectKey(item)}><span>{item.label}</span><small>{index===0?'RF / ST':`M[${address}]`}</small></button>; })}
+                {LK_KINE_AUXILIARY.map((address,index) => { const item=activeLayer.keys[24+index]; const pressed=pressedKeys.has(address); const tested=testedKeys.has(address); return <button key={address} title={`${item.label} 채널 전환 · 길게 눌러 페어링`} className={`protected-key ${selectedKeyId===item.id?'selected':''} ${pressed?'pressed':''} ${tested?'tested':''}`} onClick={()=>clickKey(item)}><span>{item.label}</span><small>{index===0?'RF / ST':`M[${address}]`}</small></button>; })}
                 <button className="roller" onClick={() => flash('엔코더 e0는 회전 시 지정된 키코드로 검사됩니다')}><span /><small>ENCODER E0</small></button>
                 <div className="device-lights" aria-label="상태 표시등"><i/><i className={deviceState==='connected'?'live':''}/></div>
               </div>
