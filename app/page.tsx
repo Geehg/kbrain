@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
+import KineScene from './kine-scene';
 import {
   isLkKine,
   LK_KINE_AUXILIARY,
@@ -171,6 +172,7 @@ export default function Home() {
   const [deviceState, setDeviceState] = useState<'idle'|'requesting'|'connected'|'unsupported'|'error'>('idle');
   const [deviceInfo, setDeviceInfo] = useState<{name:string;vid:string;pid:string;protocol:string}|null>(null);
   const [keyTestEnabled, setKeyTestEnabled] = useState(false);
+  const [deviceView, setDeviceView] = useState<'3d' | '2d'>('3d');
   const [matrixPressed, setMatrixPressed] = useState<Set<MatrixAddress>>(() => new Set());
   const [domPressed, setDomPressed] = useState<Set<MatrixAddress>>(() => new Set());
   const [testedKeys, setTestedKeys] = useState<Set<MatrixAddress>>(() => new Set());
@@ -204,6 +206,17 @@ export default function Home() {
   const hardware = config.hardware ?? defaultHardware;
   const physicalLayout = useMemo(() => transformLkKineLayout(hardware.plate, hardware.mirrored, hardware.rotation), [hardware]);
   const pressedKeys = useMemo(() => new Set<MatrixAddress>([...matrixPressed, ...domPressed]), [matrixPressed, domPressed]);
+  const modelKeys = useMemo(() => [
+    ...physicalLayout.cells.map((cell, index) => {
+      const isProtected = cell.matrix === LK_KINE_HOME_FN.address;
+      const item = isProtected ? homeFnKey : activeLayer.keys[index];
+      return { id: item.id, label: item.label, glyph: item.glyph, matrix: cell.matrix, protected: isProtected };
+    }),
+    ...LK_KINE_AUXILIARY.map((matrix, index) => {
+      const item = activeLayer.keys[24 + index];
+      return { id: item.id, label: item.label, glyph: item.glyph, matrix, protected: true };
+    }),
+  ], [physicalLayout.cells, activeLayer]);
 
   useEffect(() => {
     if (!keyTestEnabled || deviceState !== 'connected' || applyState.status === 'applying') return;
@@ -460,19 +473,20 @@ export default function Home() {
             </div>
           </div>
 
+          <div className="device-view-switch" aria-label="키패드 표시 방식"><button aria-pressed={deviceView==='3d'} onClick={() => setDeviceView('3d')}>3D 제품 보기</button><button aria-pressed={deviceView==='2d'} onClick={() => setDeviceView('2d')}>2D 키맵</button></div>
           <div className="device-stage"><div>
             <div className="device-label"><span>NOVA KINE · PLATE {hardware.plate}</span><small>{hardware.rotation===90||hardware.rotation===270?'LANDSCAPE':'PORTRAIT'} · {hardware.mirrored?'RIGHT MIRROR':'LEFT STANDARD'} · {physicalLayout.cells.length} KEYS + 3 AUX + E0</small></div>
-            <div className={`device-body rot-${hardware.rotation}`}>
+            {deviceView==='3d' ? <KineScene plate={hardware.plate} mirrored={hardware.mirrored} rotation={hardware.rotation} keys={modelKeys} selectedId={selectedKeyId} pressed={pressedKeys} tested={testedKeys} connected={deviceState==='connected'} onSelect={id => { const item=id===homeFnKey.id?homeFnKey:activeLayer.keys.find(key=>key.id===id); if(item) selectKey(item); }} onFallback={() => setDeviceView('2d')} /> : <div className={`device-body rot-${hardware.rotation}`}>
               <div className="key-grid physical-grid" style={{gridTemplateColumns:physicalLayout.gridTemplateColumns,gridTemplateRows:physicalLayout.gridTemplateRows}}>
                 {physicalLayout.cells.map((cell,index) => { const isHomeFn=cell.matrix===LK_KINE_HOME_FN.address; const item=isHomeFn?homeFnKey:activeLayer.keys[index]; const pressed=pressedKeys.has(cell.matrix); const tested=testedKeys.has(cell.matrix); return <button key={`${hardware.plate}-${cell.matrix}`} style={{gridColumn:`${cell.col} / span ${cell.width}`,gridRow:`${cell.row} / span ${cell.height}`}} aria-label={`${item.label} 키 · 매트릭스 ${cell.matrix}${isHomeFn?' · 무선 보호':''}`} className={`deck-key ${selectedKeyId === item.id ? 'selected' : ''} ${item.tone ? 'accent-key' : ''} ${pressed?'pressed':''} ${tested?'tested':''} ${(cell.width??1)>1?'wide-key':''} ${(cell.height??1)>1?'tall-key':''} ${cell.section==='function'?'function-key':''} ${isHomeFn?'protected-key':''}`} onClick={() => selectKey(item)}><span>{isHomeFn?'FN':item.glyph}</span><strong>{item.label}</strong><small>{isHomeFn?'L2 HOLD · SAFE':`M[${cell.matrix}]`}</small></button>; })}
               </div>
               <div className="device-controls">
-                <div className="device-screen"><small>RF / ST · SAFE</small><strong>KINE</strong></div>
+                <div className="device-screen" title="반투명 무선 안테나 구획 · 화면이 아닙니다"><small>RF ANTENNA</small><strong>KINE</strong></div>
                 {LK_KINE_AUXILIARY.map((address,index) => { const item=activeLayer.keys[24+index]; const pressed=pressedKeys.has(address); const tested=testedKeys.has(address); return <button key={address} title={`${item.label} 채널 전환 · 길게 눌러 페어링`} className={`protected-key ${selectedKeyId===item.id?'selected':''} ${pressed?'pressed':''} ${tested?'tested':''}`} onClick={()=>selectKey(item)}><span>{item.label}</span><small>{index===0?'RF / ST':`M[${address}]`}</small></button>; })}
                 <button className="roller" onClick={() => flash('엔코더 e0는 회전 시 지정된 키코드로 검사됩니다')}><span /><small>ENCODER E0</small></button>
                 <div className="device-lights" aria-label="상태 표시등"><i/><i className={deviceState==='connected'?'live':''}/></div>
               </div>
-            </div>
+            </div>}
             <div className={`test-readout ${keyTestEnabled?'active':''} ${applyState.status}`}><span><i/>{keyTestEnabled ? pressedKeys.size ? `입력 감지 · ${[...pressedKeys].map(value=>`M[${value}]`).join(' ')}` : testSource==='keyboard' ? '브라우저 키 입력 대기 · VIA Matrix 보안 모드' : '실제 키를 눌러 매트릭스를 확인하세요' : '키 테스트 꺼짐'}</span><b>{applyState.message || (deviceState==='connected' ? `VIA ${deviceInfo?.protocol}` : 'USB-C 연결 필요')}</b></div>
           </div></div>
           <footer className="status-strip"><span><i className={deviceState==='connected'?'live':''} /> {deviceState==='connected'?'LK-KINE VIA 연결됨':'오프라인 설계 모드'}</span><span>{physicalLayout.cells.length} KEYS · BT SAFE ×3 · E0</span><span>Matrix 5×12 · Plate {hardware.plate} · {hardware.rotation}°</span><button onClick={checkSync}>{deviceInfo?'키 테스트':'장치 연결'} ↗</button></footer>
