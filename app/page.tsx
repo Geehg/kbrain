@@ -185,6 +185,19 @@ export default function Home() {
   const viaClientRef = useRef<ViaWebHidClient|null>(null);
 
   useEffect(() => {
+    const hid = (navigator as Navigator & { hid?: LkKineHidApi }).hid;
+    const disconnect = (event: Event & { device: LkKineHidDevice }) => {
+      if (event.device !== deviceRef.current) return;
+      deviceRef.current = null; viaClientRef.current = null;
+      setDeviceState('idle'); setDeviceInfo(null); setKeyTestEnabled(false);
+      setMatrixPressed(new Set()); setDomPressed(new Set());
+      setApplyState({ status:'idle', done:0, total:0, message:'USB 연결이 해제되었습니다' });
+    };
+    hid?.addEventListener?.('disconnect', disconnect);
+    return () => hid?.removeEventListener?.('disconnect', disconnect);
+  }, []);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       const saved = localStorage.getItem('kbrain-command-deck-v1');
       if (!saved) return;

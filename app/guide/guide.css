@@ -48,6 +48,8 @@
 .nk-indicators i.red { background:#ef604d; box-shadow:0 0 0 4px rgba(239,96,77,.16),0 0 15px #ef604d; }
 .nk-indicators i.blue { background:#5687ef; box-shadow:0 0 0 4px rgba(86,135,239,.16),0 0 15px #5687ef; animation:indicator-fast 1s steps(1) infinite; }
 .nk-indicators i.green { background:#61c46d; box-shadow:0 0 0 4px rgba(97,196,109,.16),0 0 15px #61c46d; animation:indicator-fast 1s steps(1) infinite; }
+.pairing-coach[data-playing=false] .nk-indicators i { animation:none; }
+.pairing-led-note { margin:0; padding:12px 18px; border-top:1px solid #d9dfd3; color:#76806f; font-size:11px; line-height:1.7; }
 .nk-cable { display:none; position:absolute; left:50%; bottom:-35px; width:54px; height:38px; border-left:4px solid #424744; }
 .mode-red .nk-cable { display:block; }.nk-cable i { position:absolute; left:-10px; top:0; width:17px; height:9px; border-radius:3px; background:#424744; }
 .hardware-map { display:grid; grid-template-columns:minmax(300px,1.15fr) minmax(240px,.85fr); gap:18px; align-items:center; padding:24px; border:1px solid #d1d4cd; border-radius:16px; background:#e9ebe4; }

@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MatrixAddress, PlateId, Rotation } from './lk-kine-profile';
 import type { Finish, ModelKey, ModelPart } from './kine-model';
+import KineLedControls from './kine-led-controls';
+import { DEFAULT_LED_SETTINGS, ledLevel, resolveKineLeds, type LedSettings } from './kine-led';
 import './kine-scene.css';
 
-type View = 'perspective' | 'top' | 'bottom' | 'left' | 'right' | 'ports';
+type View = 'perspective' | 'top' | 'bottom' | 'left' | 'right' | 'ports' | 'leds';
 type Props = {
   plate: PlateId; mirrored: boolean; rotation: Rotation; keys: ModelKey[];
   selectedId: string; pressed: Set<MatrixAddress>; tested: Set<MatrixAddress>;
@@ -16,6 +18,7 @@ type SceneApi = {
   sync: (props: Props, labels: boolean) => void;
   view: (view: View) => void; zoom: (factor: number) => void;
   spin: (enabled: boolean) => void; power: (on: boolean) => void;
+  leds: (settings: LedSettings) => void;
 };
 
 const views: [View, string][] = [['perspective', '입체'], ['top', '앞면'], ['bottom', '뒷면'], ['left', '왼쪽'], ['right', '오른쪽'], ['ports', 'USB 측면']];
@@ -24,7 +27,7 @@ const parts: Record<ModelPart, { title: string; copy: string }> = {
   roller: { title: '가로형 롤러 · E0', copy: '클릭하면 모델의 롤러가 회전합니다. 실제 기기의 기본 동작은 볼륨 조절이며 VIA에서 변경할 수 있습니다.' },
   power: { title: '뒷면 전원 스위치', copy: '무선 사용 전 실제 기기 바닥의 스위치를 ON으로 옮기세요. 아래 조작은 3D 모형에만 적용됩니다.' },
   usb: { title: 'USB-C 포트', copy: '상단 4개 키 뒤쪽의 짧은 측면에 있습니다. 데이터 케이블로 PC에 연결한 뒤 장치 연결 메뉴에서 키맵을 적용하세요.' },
-  leds: { title: '두 개의 상태 표시등', copy: '세로 앞면 기준 왼쪽은 Num Lock, 오른쪽은 연결 모드 표시등입니다. 여기의 조명은 미리보기이며 실제 LED 상태를 읽은 값이 아닙니다.' },
+  leds: { title: '매립형 상태 표시등', copy: '세로 정면 기준 왼쪽은 Num Lock, 오른쪽은 연결 모드입니다. 아래 LED 패널에서 연결·페어링·배터리 확인 예시를 볼 수 있습니다. 실제 LED 상태를 읽거나 바꾸지는 않습니다.' },
   back: { title: '알루미늄 바닥면', copy: 'NOVA KINE 명판, 전원 스위치, 원형으로 파인 홈과 긴 고무 받침을 재현했습니다. 세부 깊이는 공식 사진을 기준으로 추정했습니다.' },
 };
 
@@ -40,9 +43,12 @@ export default function KineScene(props: Props) {
   const [spinning, setSpinning] = useState(false);
   const [part, setPart] = useState<ModelPart | null>(null);
   const [powerOn, setPowerOn] = useState(true);
+  const [ledSettings, setLedSettings] = useState<LedSettings>(DEFAULT_LED_SETTINGS);
+  const ledSettingsRef = useRef(ledSettings);
   const keySignature = useMemo(() => JSON.stringify(props.keys), [props.keys]);
 
   useEffect(() => { propsRef.current = props; apiRef.current?.sync(props, labels); }, [props, labels]);
+  useEffect(() => { ledSettingsRef.current = ledSettings; apiRef.current?.leds(ledSettings); }, [ledSettings]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -68,7 +74,7 @@ export default function KineScene(props: Props) {
       camera.position.set(115, 220, 165);
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.target.set(0, 10, 0); controls.enableDamping = true; controls.dampingFactor = .1;
-      controls.minDistance = 140; controls.maxDistance = 650; controls.enablePan = false;
+      controls.minDistance = 55; controls.maxDistance = 650; controls.enablePan = false;
       controls.autoRotateSpeed = .8; controls.update();
       const hemi = new THREE.HemisphereLight('#f4f8ff', '#79848a', 1.1); scene.add(hemi);
       const keyLight = new THREE.DirectionalLight('#ffffff', 2.1); keyLight.position.set(-90, 180, 40); keyLight.castShadow = true;
@@ -85,6 +91,14 @@ export default function KineScene(props: Props) {
       const activePointers = new Set<number>(); let gesture = false;
       const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
       let labelsVisible = true;
+      let currentLedSettings = ledSettingsRef.current;
+      let currentLeds = resolveKineLeds(currentLedSettings, propsRef.current.connected);
+      let ledEpoch = performance.now();
+      const updateLeds = () => {
+        const next = resolveKineLeds(currentLedSettings, propsRef.current.connected);
+        if (JSON.stringify(next.signals) !== JSON.stringify(currentLeds.signals)) ledEpoch = performance.now();
+        currentLeds = next;
+      };
       const wake = () => { dirty = true; if (!frame && !ticking && visible && !lost) frame = requestAnimationFrame(tick); };
       const sync = (p: Props, showLabels: boolean) => {
         labelsVisible = showLabels;
@@ -97,8 +111,7 @@ export default function KineScene(props: Props) {
           key.ring.visible = key.id === p.selectedId || p.pressed.has(key.matrix) || p.tested.has(key.matrix);
           (key.ring.material as InstanceType<typeof THREE.MeshBasicMaterial>).color.set(p.pressed.has(key.matrix) ? '#84e8ff' : key.id === p.selectedId ? '#c8f135' : '#7ba66f');
         }
-        model.ledMaterials[1].color.set(p.connected ? '#f17663' : '#88918f');
-        model.ledMaterials[1].emissive.set(p.connected ? '#722010' : '#000000'); wake();
+        updateLeds(); wake();
       };
       const chooseView = (next: View) => {
         const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
@@ -106,10 +119,10 @@ export default function KineScene(props: Props) {
         // when the user changes the portrait/landscape orientation.
         const vectors: Record<View, [number, number, number]> = {
           perspective: [.4, .78, .54], top: [0, 1, .001], bottom: [0, -1, .001],
-          left: [-1, .13, .001], right: [1, .13, .001], ports: [0, .13, -1],
+          left: [-1, .13, .001], right: [1, .13, .001], ports: [0, .13, -1], leds: [.35, .8, .5],
         };
         targetPosition.set(...vectors[next]).normalize();
-        if (next === 'left' || next === 'right' || next === 'ports') targetPosition.applyAxisAngle(new THREE.Vector3(0, 1, 0), model.root.rotation.y);
+        if (next === 'left' || next === 'right' || next === 'ports' || next === 'leds') targetPosition.applyAxisAngle(new THREE.Vector3(0, 1, 0), model.root.rotation.y);
         targetFocus.set(0, 10, 0);
         // Fit the actual rotated case bounds, including its depth in perspective.
         const bounds = new THREE.Box3().setFromObject(model.root);
@@ -121,6 +134,10 @@ export default function KineScene(props: Props) {
           distance = Math.max(distance, corner.dot(targetPosition) + Math.max(Math.abs(corner.dot(up)) / Math.tan(halfFov), Math.abs(corner.dot(right)) / (Math.tan(halfFov) * camera.aspect)));
         }
         targetPosition.multiplyScalar(distance * 1.2).add(targetFocus);
+        if (next === 'leds') {
+          targetFocus.set(42.2, 15.5, 52).applyAxisAngle(new THREE.Vector3(0, 1, 0), model.root.rotation.y);
+          targetPosition.set(...vectors.leds).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), model.root.rotation.y).multiplyScalar(Math.max(84, 58 / camera.aspect)).add(targetFocus);
+        }
         transition = !reduced.matches;
         if (!transition) { camera.position.copy(targetPosition); controls.target.copy(targetFocus); controls.update(); }
         controls.autoRotate = false; setSpinning(false); setView(next); wake();
@@ -188,6 +205,17 @@ export default function KineScene(props: Props) {
           if (camera.position.distanceTo(targetPosition) < .05) { camera.position.copy(targetPosition); transition = false; }
         }
         const p = propsRef.current;
+        const freezeLeds = reduced.matches || currentLedSettings.paused;
+        for (let i = 0; i < 2; i++) {
+          const signal = currentLeds.signals[i], level = ledLevel(signal, now - ledEpoch, freezeLeds);
+          const strength = level * currentLedSettings.brightness / 100;
+          const material = model.ledMaterials[i];
+          material.color.set(i ? '#c5cac7' : '#51585a').lerp(new THREE.Color(signal.color), strength * .45);
+          material.emissive.set(signal.color); material.emissiveIntensity = strength * 4.2;
+          model.ledLights[i].color.set(signal.color); model.ledLights[i].intensity = currentLedSettings.spill ? strength * 32 : 0;
+          model.ledHalos[i].material.color.set(signal.color); model.ledHalos[i].material.opacity = currentLedSettings.spill ? strength * .7 : 0;
+          if (!freezeLeds && (signal.pattern === 'pairing' || signal.pattern === 'warning')) animating = true;
+        }
         for (const key of model.keyMeshes) {
           const pressed = p.pressed.has(key.matrix) || (virtualPress === key.id && now < pressUntil);
           const destination = pressed ? -1.5 : 0;
@@ -224,6 +252,7 @@ export default function KineScene(props: Props) {
         }, sync, view: chooseView, zoom,
         spin: enabled => { controls.autoRotate = enabled; transition = false; wake(); },
         power: on => { model.switchThumb.position.x = on ? -1.8 : 1.8; wake(); },
+        leds: settings => { currentLedSettings = settings; updateLeds(); wake(); },
       };
       // Preserve a single renderer across preset and input updates.
       sync(propsRef.current, true); resize(); chooseView('perspective'); setReady(true);
@@ -246,6 +275,10 @@ export default function KineScene(props: Props) {
   }, [keySignature, props.plate, props.mirrored, finish, ready]);
   useEffect(() => { if (ready) apiRef.current?.power(powerOn); }, [powerOn, ready, finish, keySignature, props.plate, props.mirrored]);
   const selectView = (next: View) => { apiRef.current?.view(next); setPart(next === 'bottom' ? 'back' : next === 'ports' ? 'usb' : null); };
+  const focusLeds = () => {
+    selectView('leds'); setPart(null);
+    mountRef.current?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+  };
 
   return <section className="kine-viewer" aria-label="NOVA KINE 3D 편집기">
     <div className="kine-viewbar"><div className="kine-view-presets" aria-label="3D 시점">{views.map(([id, label]) => <button key={id} aria-pressed={view === id} disabled={!ready || !!error} onClick={() => selectView(id)}>{label}</button>)}</div><button className="kine-reset" disabled={!ready || !!error} onClick={() => selectView('perspective')} title="처음 시점으로">↺ <span>시점 초기화</span></button></div>
@@ -259,7 +292,8 @@ export default function KineScene(props: Props) {
       {part && <aside className="kine-part-info" aria-live="polite"><button className="kine-info-close" aria-label="부품 안내 닫기" onClick={() => setPart(null)}>×</button><strong>{parts[part].title}</strong><p>{parts[part].copy}</p>{part === 'power' && <button className="kine-power" aria-pressed={powerOn} onClick={() => setPowerOn(value => !value)}>모형 스위치 {powerOn ? 'ON' : 'OFF'}</button>}</aside>}
     </div>
     <div className="kine-options"><div className="kine-finishes" aria-label="모형 케이스 색상"><span>케이스</span>{([['silver', '실버'], ['gray', '그레이'], ['black', '블랙']] as [Finish, string][]).map(([id, name]) => <button key={id} aria-label={name} title={name} aria-pressed={finish === id} onClick={() => setFinish(id)}><i className={`finish-${id}`} /></button>)}</div><label><input type="checkbox" checked={labels} onChange={e => setLabels(e.target.checked)} />키 이름</label><label><input type="checkbox" checked={spinning} disabled={!ready || !!error} onChange={e => { setSpinning(e.target.checked); apiRef.current?.spin(e.target.checked); }} />자동 회전</label></div>
-    <div className="kine-part-links" aria-label="부품 살펴보기"><button onClick={() => { selectView('bottom'); setPart('power'); }}>전원 스위치</button><button onClick={() => { selectView('ports'); setPart('usb'); }}>USB-C</button><button onClick={() => { selectView('top'); setPart('antenna'); }}>안테나</button><button onClick={() => { selectView('top'); setPart('leds'); }}>표시등</button></div>
+    <div className="kine-part-links" aria-label="부품 살펴보기"><button onClick={() => { selectView('bottom'); setPart('power'); }}>전원 스위치</button><button onClick={() => { selectView('ports'); setPart('usb'); }}>USB-C</button><button onClick={() => { selectView('top'); setPart('antenna'); }}>안테나</button><button onClick={() => { selectView('leds'); setPart('leds'); }}>표시등</button></div>
+    <KineLedControls settings={ledSettings} connected={props.connected} onChange={patch => setLedSettings(current => ({ ...current, ...patch }))} onCloseup={focusLeds}/>
     <p className="kine-model-note">공식 외형 111.65 × 136.01 × 24.5 mm를 기준으로 재구성한 모델입니다. 세부 곡면·깊이는 사진 기반 추정이며, 키 이름과 조명은 화면용 표시입니다. <a href="https://www.luminkey.com/products/luminkey-nova-kine-keyboard" target="_blank" rel="noreferrer">제품 자료 ↗</a> <a href="https://cdn.shopify.com/s/files/1/0815/1800/2452/files/Nova_Kine_user_guide_77b098bd-6f5b-4df1-812a-a262a244c5c3.pdf?v=1781226519" target="_blank" rel="noreferrer">공식 설명서 ↗</a></p>
   </section>;
 }

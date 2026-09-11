@@ -24,7 +24,7 @@ const modeInfo:Record<Mode,{label:string;color:string;steps:{title:string;copy:s
   usb:{ label:'USB-C 유선', color:'red', steps:[
     {title:'데이터 케이블을 준비하세요',copy:'충전 전용이 아닌 동봉 USB-C 데이터 케이블을 사용합니다.'},
     {title:'컴퓨터와 KINE을 연결하세요',copy:'케이블을 연결하면 장치가 자동으로 유선 모드로 전환됩니다.',signal:'red'},
-    {title:'빨간 표시등을 확인하세요',copy:'빨간색 점등이 보이면 VIA 설정과 펌웨어 작업을 시작할 수 있습니다.',signal:'red'},
+    {title:'기본 빨간 표시등을 확인하세요',copy:'유선 기본 색은 빨강이며 VIA에서 변경할 수 있습니다. 설정 사이트의 연결 완료 표시도 함께 확인하세요.',signal:'red'},
   ]},
   bluetooth:{ label:'Bluetooth', color:'blue', steps:[
     {title:'케이블을 빼고 후면 전원을 켜세요',copy:'뒷면 전원 스위치를 ON으로 옮깁니다. 최초 연결 시 빠른 점멸은 정상입니다.'},
@@ -53,7 +53,7 @@ function KeypadDiagram({ activeKeys=[], signal='off', compact=false }:{ activeKe
       <div className="nk-screen"><small>NOVA</small><b>KINE</b></div>
       {['bt1','bt2','bt3'].map((id,index)=><span key={id} className={`nk-side-key ${activeKeys.includes(id)?'is-active':''}`}><b>BT{index+1}</b></span>)}
       <div className="nk-roller"><i/></div>
-      <div className="nk-indicators"><i className={signal}/><i className={signal}/></div>
+      <div className="nk-indicators" aria-label="왼쪽 Num Lock, 오른쪽 연결 표시등"><i className="off"/><i className={signal}/></div>
     </div>
     <div className="nk-cable" aria-hidden="true"><i/></div>
   </div>;
@@ -96,7 +96,7 @@ export function PairingCoach() {
   },[step,playing,info.steps.length]);
   const current=info.steps[step];
   const activeKeys=(current.keys??[]).map(key=>key==='slot'?slot:key==='bt-slot'?`bt${slot}`:key);
-  return <div className={`pairing-coach mode-${info.color}`}>
+  return <div className={`pairing-coach mode-${info.color}`} data-playing={playing}>
     <div className="pairing-tabs" role="tablist" aria-label="연결 방식 선택">
       {(Object.keys(modeInfo) as Mode[]).map(id=><button key={id} role="tab" aria-selected={mode===id} className={mode===id?'active':''} onClick={()=>chooseMode(id)}><i/>{modeInfo[id].label}</button>)}
     </div>
@@ -106,6 +106,7 @@ export function PairingCoach() {
       <ol className="pairing-steps">{info.steps.map((item,index)=><li key={item.title} className={index===step?'active':index<step?'done':''}><button onClick={()=>{setStep(index);setPlaying(false)}}><span>{index<step?'✓':index+1}</span><div><b>{item.title}</b><small>{item.copy}</small></div></button></li>)}</ol>
     </div>
     <div className="coach-controls"><button onClick={()=>setPlaying(value=>!value)}>{playing?'Ⅱ 자동 안내 멈춤':'▶ 자동 안내 계속'}</button><div aria-hidden="true"><i style={{width:`${((step+1)/info.steps.length)*100}%`}}/></div><span>{step+1} / {info.steps.length}</span></div>
+    <p className="pairing-led-note">도면의 파랑·초록은 연결 방식을 구분하는 예시 색입니다. 설명서는 무선 슬롯별 색이나 정확한 점멸 주기를 정하지 않으며, VIA에서 표시등 색을 바꿀 수 있습니다. 편집기의 <b>LED · LIGHT STUDY</b>에서 매립 렌즈 발광과 페어링·배터리 예시를 확대해 볼 수 있습니다.</p>
   </div>;
 }
 

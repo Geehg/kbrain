@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { KINE_SIZE, kineKeyPlacements } from './kine-geometry';
+import { edgeRecessOutline, frostDishGeometry, frostStemTexture, knurledRollerGeometry, ledHaloTexture, machinedUV, metalGrainTexture } from './kine-detail-geometry';
 import type { MatrixAddress, PlateId } from './lk-kine-profile';
 
 export type Finish = 'silver' | 'gray' | 'black';
 export type ModelKey = { id: string; matrix: MatrixAddress; label: string; glyph: string; protected: boolean };
 export type ModelPart = 'antenna' | 'roller' | 'power' | 'usb' | 'leds' | 'back';
 export type KeyMesh = { group: THREE.Group; ring: THREE.Mesh; label: THREE.Mesh; material: THREE.MeshStandardMaterial; restY: number; id: string; matrix: MatrixAddress };
-export const FINISHES = { silver: '#c2c9ca', gray: '#626970', black: '#252a2e' };
+export const FINISHES = { silver: '#c4c6c2', gray: '#626970', black: '#252a2e' };
 
 function roundedPath(w: number, h: number, radius: number) {
   const p = new THREE.Shape(); const x = -w / 2, y = -h / 2;
@@ -54,7 +55,8 @@ function textTexture(lines: string[], dark = false, label = false) {
 
 export function createKineModel(plate: PlateId, mirrored: boolean, keys: ModelKey[], finish: Finish) {
   const root = new THREE.Group(); root.name = 'NOVA KINE';
-  const metal = new THREE.MeshStandardMaterial({ color: FINISHES[finish], metalness: .78, roughness: .33 });
+  const grain = metalGrainTexture();
+  const metal = new THREE.MeshStandardMaterial({ color: FINISHES[finish], metalness: .78, roughness: .54, roughnessMap: grain, bumpMap: grain, bumpScale: .018 });
   const bevelMetal = new THREE.MeshStandardMaterial({ color: FINISHES[finish], metalness: .86, roughness: .22 });
   const dark = new THREE.MeshStandardMaterial({ color: '#161e23', metalness: .12, roughness: .75 });
   const rubber = new THREE.MeshStandardMaterial({ color: '#232a2c', roughness: .98 });
@@ -70,65 +72,74 @@ export function createKineModel(plate: PlateId, mirrored: boolean, keys: ModelKe
   };
   addBox(root, KINE_SIZE.width - .5, 1.3, KINE_SIZE.depth - .5, 0, .85, 0, metal, .6);
   addBox(root, KINE_SIZE.width - .2, .4, KINE_SIZE.depth - .2, 0, 1.65, 0, dark, .15);
-  addBox(root, KINE_SIZE.width, 10.9, KINE_SIZE.depth, 0, 7.3, 0, metal, 2.8);
+  addBox(root, KINE_SIZE.width, 7.8, KINE_SIZE.depth, 0, 5.75, 0, metal, 2.2);
+  const bodyShape = edgeRecessOutline(KINE_SIZE.width, KINE_SIZE.depth, 4, 24.2, 56.4, 5, .6);
+  bodyShape.holes.push(shiftedPath(15.4, 19.2, 2, 42.4, 43.5));
+  const upperBody = new THREE.Mesh(new THREE.ExtrudeGeometry(bodyShape, { depth: 3.05, bevelEnabled: false, curveSegments: 12 }), metal);
+  upperBody.rotation.x = -Math.PI / 2; upperBody.position.y = 9.65; upperBody.castShadow = true; upperBody.receiveShadow = true; root.add(upperBody);
 
   // A true cut-out upper shell: wells remain recessed when viewed obliquely.
-  const shell = roundedPath(KINE_SIZE.width, KINE_SIZE.depth, 4);
+  const shell = edgeRecessOutline(KINE_SIZE.width, KINE_SIZE.depth, 4, 24.2, 56.4, 5, .6);
   shell.holes.push(shiftedPath(77.4, 20.3, 2, -11.7, -50.5));
   shell.holes.push(shiftedPath(77.4, 96.3, 2, -11.7, 11.3));
-  shell.holes.push(shiftedPath(21.8, 55, 1.3, 42.4, -5));
-  shell.holes.push(shiftedPath(15.4, 24, 2, 42.4, 43.5));
+  shell.holes.push(shiftedPath(15.4, 19.2, 2, 42.4, 43.5));
   shell.holes.push(shiftedPath(22.3, 28, 1.4, 43.9, -53.25));
+  for (let i = 0; i < 2; i++) {
+    const hole = new THREE.Path(); hole.absarc(38.7 + i * 7, -61.6, 2.15, 0, Math.PI * 2, false); shell.holes.push(hole);
+  }
   const frame = new THREE.Mesh(new THREE.ExtrudeGeometry(shell, { depth: 3.2, bevelEnabled: true, bevelThickness: .4, bevelSize: .4, bevelSegments: 2, curveSegments: 12 }), metal);
   frame.rotation.x = -Math.PI / 2; frame.position.y = 12.7; frame.castShadow = true; frame.receiveShadow = true; root.add(frame);
   const raisedShape = roundedPath(88.9, KINE_SIZE.depth, 3.7);
   raisedShape.holes.push(shiftedPath(77.4, 20.3, 2, -.325, -50.5));
   raisedShape.holes.push(shiftedPath(77.4, 96.3, 2, -.325, 11.3));
-  const raised = new THREE.Mesh(new THREE.ExtrudeGeometry(raisedShape, { depth: 1.65, bevelEnabled: true, bevelThickness: .3, bevelSize: .3, bevelSegments: 2 }), metal);
+  const surroundSeam = new THREE.Mesh(new THREE.ExtrudeGeometry(raisedShape, { depth: .16, bevelEnabled: false }), dark);
+  surroundSeam.rotation.x = -Math.PI / 2; surroundSeam.position.set(-11.375, 16.05, 0); root.add(surroundSeam);
+  const raised = new THREE.Mesh(new THREE.ExtrudeGeometry(raisedShape, { depth: 1.65, bevelEnabled: true, bevelThickness: .3, bevelSize: .5, bevelSegments: 2 }), metal);
   raised.rotation.x = -Math.PI / 2; raised.position.set(-11.375, 16.25, 0); raised.castShadow = true; raised.receiveShadow = true; root.add(raised);
   addBox(root, 77.3, .5, 20.2, -11.7, 13, -50.5, dark);
   addBox(root, 77.3, .5, 96.2, -11.7, 13, 11.3, dark);
-  addBox(root, 21.7, .5, 55, 42.4, 13, -5, dark);
+  addBox(root, 23.7, .25, 56, 43.6, 9.8, -5, dark, .1);
   addBox(root, .4, .2, 131, 32.95, 18.05, 0, bevelMetal, .1);
-  // Recess below the three overhanging side buttons.
-  addBox(root, .3, 4.8, 54.2, KINE_SIZE.width / 2 + .01, 13.1, -5, dark, .1);
+  // The dock is open at the outer edge, with a real undercut below the keys.
+  addBox(root, .25, 5, 55.6, 31.75, 12.2, -5, dark, .1);
 
   const ringShape = (w: number, d: number) => {
     const shape = roundedPath(w + .8, d + .8, 2.2);
     shape.holes.push(roundedPath(w - .5, d - .5, 1.7));
     const geometry = new THREE.ShapeGeometry(shape, 16); geometry.rotateX(-Math.PI / 2); return geometry;
   };
+  const faceMaterials = new Map<string, THREE.MeshPhysicalMaterial>();
+  const frost = new THREE.MeshPhysicalMaterial({ color: '#a2a7ac', transparent: true, opacity: .18, metalness: .04, roughness: .38, clearcoat: .65, clearcoatRoughness: .3, depthWrite: false });
   for (const placement of kineKeyPlacements(plate, mirrored)) {
     const item = keysByAddress.get(placement.matrix);
     if (!item) continue;
     const { width: w, depth: d, auxiliary } = placement;
     const group = new THREE.Group(); group.position.set(placement.x, 0, placement.z);
     group.userData.keyId = item.id; group.userData.matrix = item.matrix; root.add(group);
-    const keyMaterial = new THREE.MeshStandardMaterial({ color: auxiliary ? FINISHES[finish] : '#29313c', metalness: auxiliary ? .65 : .1, roughness: auxiliary ? .38 : .49 });
-    const cap = addBox(group, w, auxiliary ? 3.2 : 5.7, d, 0, auxiliary ? 16.5 : 18.8, 0, keyMaterial, auxiliary ? 1 : 1.5);
+    const keyMaterial = new THREE.MeshStandardMaterial({ color: auxiliary ? FINISHES[finish] : '#24292e', metalness: auxiliary ? .78 : .12, roughness: auxiliary ? .54 : .43, ...(auxiliary ? { roughnessMap: grain, bumpMap: grain, bumpScale: .018 } : {}) });
+    const cap = addBox(group, w, auxiliary ? 2.2 : 5.7, d, 0, auxiliary ? 16.1 : 18.8, 0, keyMaterial, auxiliary ? .24 : 1.15);
+    cap.name = auxiliary ? 'auxiliary-pocket-floor' : 'smoky-key-skirt';
     if (!auxiliary) {
       const vertices = cap.geometry.getAttribute('position');
       for (let i = 0; i < vertices.count; i++) {
-        const taper = 1 - (vertices.getY(i) / 5.7 + .5) * .055;
+        const taper = 1 - (vertices.getY(i) / 5.7 + .5) * .095;
         vertices.setX(i, vertices.getX(i) * taper); vertices.setZ(i, vertices.getZ(i) * taper);
       }
       vertices.needsUpdate = true; cap.geometry.computeVertexNormals();
-      const frost = new THREE.MeshPhysicalMaterial({ color: '#8490a1', transparent: true, opacity: .24, metalness: .05, roughness: .43, clearcoat: .38, depthWrite: false });
-      addBox(group, w - .7, 2.7, d - .7, 0, 22.3, 0, frost, 1.2);
-      const inset = addBox(group, w > 20 ? w - 4 : 14.3, .8, d > 20 ? d - 4 : 14.3, 0, 23.9, 0, new THREE.MeshStandardMaterial({ color: '#505b6a', roughness: .56, metalness: .08 }), .4);
-      // Circular/stadium finger surfaces on the factory Frost caps.
-      inset.geometry.dispose();
-      const faceShape = roundedPath(w > 20 ? w - 4 : 14.3, d > 20 ? d - 4 : 14.3, 7.15);
-      const faceGeometry = new THREE.ExtrudeGeometry(faceShape, { depth: .7, bevelEnabled: true, bevelThickness: .22, bevelSize: .22, bevelSegments: 2, curveSegments: 20 });
-      faceGeometry.rotateX(-Math.PI / 2); inset.geometry = faceGeometry; inset.position.y = 23.2;
-      // The dark cross is the visible stem, not a printed legend.
-      for (const offset of w > 20 ? [-11, 0, 11] : d > 20 ? [-11, 0, 11] : [0]) {
-        const cx = w > 20 ? offset : 0, cz = d > 20 ? offset : 0;
-        addBox(group, 4.8, .13, 1.5, cx, 24.18, cz, dark, .06);
-        addBox(group, 1.5, .13, 4.8, cx, 24.18, cz, dark, .06);
+      addBox(group, w - .85, 2, d - .85, 0, 22.3, 0, frost, .85);
+      const fw = w > 20 ? w - 4 : 14.3, fd = d > 20 ? d - 4 : 14.3, signature = `${fw}/${fd}`;
+      let faceMaterial = faceMaterials.get(signature);
+      if (!faceMaterial) {
+        faceMaterial = new THREE.MeshPhysicalMaterial({ map: frostStemTexture(fw, fd), roughness: .5, metalness: .08, clearcoat: .32, clearcoatRoughness: .38 });
+        faceMaterials.set(signature, faceMaterial);
       }
+      const faceGeometry = frostDishGeometry(fw, fd);
+      const face = new THREE.Mesh(faceGeometry, faceMaterial); face.name = 'dished-frost-cap'; face.castShadow = true; group.add(face);
+      const lens = new THREE.Mesh(faceGeometry, frost); lens.position.y = .12; group.add(lens);
     } else {
-      addBox(group, .3, .18, 9, w / 2 - 2.5, 18.25, 0, bevelMetal, .05);
+      const shape = edgeRecessOutline(w, d, .55, 3.3, 9.2, 0, 1.35);
+      const top = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: .85, bevelEnabled: true, bevelSize: .11, bevelThickness: .08, bevelSegments: 2, curveSegments: 12 }), keyMaterial);
+      top.rotation.x = -Math.PI / 2; top.position.y = 17.2; top.name = 'auxiliary-pocket-rim'; top.castShadow = true; top.receiveShadow = true; group.add(top);
     }
     const ring = new THREE.Mesh(ringShape(w, d), new THREE.MeshBasicMaterial({ color: '#c8f135', side: THREE.DoubleSide }));
     ring.position.y = auxiliary ? 18.6 : 24.55; ring.visible = false; group.add(ring);
@@ -144,20 +155,30 @@ export function createKineModel(plate: PlateId, mirrored: boolean, keys: ModelKe
   addBox(root, 14, 1, 19, 43.9, 12, -53, dark);
 
   // Horizontal roller: cylinder axis follows the portrait horizontal direction.
-  const rollerGroup = new THREE.Group(); rollerGroup.position.set(42.4, 16.4, 43.5); rollerGroup.userData.part = 'roller'; root.add(rollerGroup);
-  addBox(root, 15.3, .4, 24, 42.4, 13, 43.5, dark, 1);
-  const roller = new THREE.Mesh(new THREE.CylinderGeometry(7.6, 7.6, 11.5, 64), bevelMetal);
-  roller.rotation.z = Math.PI / 2; rollerGroup.add(roller); roller.castShadow = true;
-  for (let i = 0; i < 48; i++) {
-    const angle = i / 48 * Math.PI * 2;
-    const rib = addBox(rollerGroup, 11.8, .32, .3, 0, Math.cos(angle) * 7.65, Math.sin(angle) * 7.65, metal, .12);
-    rib.rotation.x = angle;
+  const rollerGroup = new THREE.Group(); rollerGroup.position.set(42.4, 11.7, 43.5); rollerGroup.userData.part = 'roller'; root.add(rollerGroup);
+  addBox(root, 15.3, .25, 19.1, 42.4, 9.85, 43.5, dark, 1);
+  const roller = new THREE.Mesh(knurledRollerGeometry(), bevelMetal);
+  roller.name = 'machined-roller'; rollerGroup.add(roller); roller.castShadow = true; roller.receiveShadow = true;
+  for (const x of [-5.92, 5.92]) {
+    const end = new THREE.Mesh(new THREE.CylinderGeometry(7.04, 7.04, .16, 64), dark);
+    end.rotation.z = Math.PI / 2; end.position.x = x; rollerGroup.add(end);
   }
   const ledMaterials: THREE.MeshStandardMaterial[] = [];
+  const ledLights: THREE.PointLight[] = [], ledHalos: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>[] = [];
+  const haloTexture = ledHaloTexture();
+  const boreMaterial = new THREE.MeshStandardMaterial({ color: '#626765', metalness: .72, roughness: .43, side: THREE.DoubleSide });
   for (let i = 0; i < 2; i++) {
-    const rim = new THREE.Mesh(new THREE.CylinderGeometry(2.15, 2.15, .6, 32), bevelMetal); rim.position.set(38.7 + i * 7, 16.2, 61.6); root.add(rim);
-    const mat = new THREE.MeshStandardMaterial({ color: '#9da6a4', roughness: .28, emissive: '#000000' }); ledMaterials.push(mat);
-    const led = new THREE.Mesh(new THREE.CylinderGeometry(1.65, 1.65, .65, 32), mat); led.position.copy(rim.position).y += .22; led.userData.part = 'leds'; root.add(led);
+    const bore = new THREE.Mesh(new THREE.LatheGeometry([new THREE.Vector2(1.83, 14.45), new THREE.Vector2(1.83, 15.52), new THREE.Vector2(2.15, 15.95), new THREE.Vector2(2.48, 16.25)], 48), boreMaterial);
+    bore.name = 'recessed-indicator-bore'; bore.position.set(38.7 + i * 7, 0, 61.6); bore.userData.part = 'leds'; root.add(bore);
+    const mat = new THREE.MeshPhysicalMaterial({ color: i ? '#c5cac7' : '#51585a', roughness: i ? .36 : .64, clearcoat: .8, clearcoatRoughness: .23, emissive: '#000000' }); ledMaterials.push(mat);
+    const led = new THREE.Mesh(i ? new THREE.SphereGeometry(1.78, 40, 20) : new THREE.CylinderGeometry(1.78, 1.78, .18, 40), mat);
+    if (i) led.scale.y = .3;
+    led.position.set(38.7 + i * 7, 14.85, 61.6); led.name = 'recessed-indicator-lens'; led.userData.part = 'leds'; root.add(led);
+    const light = new THREE.PointLight('#ffffff', 0, 13, 2);
+    light.position.set(38.7 + i * 7, 16.8, 61.6); root.add(light); ledLights.push(light);
+    const halo = new THREE.Mesh(new THREE.PlaneGeometry(11, 11), new THREE.MeshBasicMaterial({ map: haloTexture, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    halo.rotation.x = -Math.PI / 2; halo.position.set(38.7 + i * 7, 16.34, 61.6); halo.raycast = () => {};
+    root.add(halo); ledHalos.push(halo);
   }
 
   // Underside nameplate and dimple panel. Screws are concealed by the rubber feet.
@@ -192,5 +213,8 @@ export function createKineModel(plate: PlateId, mirrored: boolean, keys: ModelKe
   addBox(port, 10.4, 4.4, .55, 0, 0, 0, bevelMetal, .25);
   addBox(port, 8.8, 3, .65, 0, 0, -.3, dark, .3);
   addBox(port, 5.8, .65, .7, 0, 0, -.65, metal, .25);
-  return { root, keyMeshes, rollerGroup, switchThumb, ledMaterials };
+  root.traverse(object => {
+    if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshStandardMaterial && object.material.bumpMap === grain) machinedUV(object.geometry);
+  });
+  return { root, keyMeshes, rollerGroup, switchThumb, ledMaterials, ledLights, ledHalos };
 }

@@ -19,6 +19,8 @@ export type LkKineHidDevice = {
 export type LkKineHidApi = {
   requestDevice: (options: { filters: Array<{ vendorId: number; productId: number; usagePage?: number; usage?: number }> }) => Promise<LkKineHidDevice[]>;
   getDevices?: () => Promise<LkKineHidDevice[]>;
+  addEventListener?: (type: 'disconnect', listener: (event: Event & { device: LkKineHidDevice }) => void) => void;
+  removeEventListener?: (type: 'disconnect', listener: (event: Event & { device: LkKineHidDevice }) => void) => void;
 };
 
 const COMMAND = {

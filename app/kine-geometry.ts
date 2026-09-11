@@ -27,7 +27,7 @@ export function kineKeyPlacements(plate: PlateId, mirrored: boolean): KineKeyPla
     };
   });
   return [...keys, ...(['4,9', '4,10', '4,11'] as MatrixAddress[]).map((matrix, index) => ({
-    matrix, index: 24 + index, x: 42.4, z: -23 + index * 18,
-    width: 20.5, depth: 16.6, auxiliary: true,
+    matrix, index: 24 + index, x: 43.9, z: -23 + index * 18,
+    width: 23.4, depth: 16.6, auxiliary: true,
   }))];
 }

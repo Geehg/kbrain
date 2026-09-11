@@ -12,10 +12,24 @@ The editor defaults to a Three.js product view. The existing 2D keymap remains a
 
 This is a parametric visual reconstruction, not manufacturer CAD. Pitch, radii, recesses, thicknesses and port offsets are inferred from photos. The frosted corner is an antenna compartment, not a display or receiver holder. Key-name overlays, selection outlines and connection preview lighting are software annotations. Power-switch and roller interactions animate the model only; the app does not read the real switch or LED state.
 
+### Close-up detail pass
+
+The owner's close-up product photograph informs the fine bead-blasted finish, raised surround chamfer and dark seam, deeply seated roller with 88 axial grooves and dark end faces, and bored indicator apertures with recessed flat/frosted lenses. Side buttons extend to the outer edge above an actual undercut and have shallow edge-open finger pockets with solid metal floors. Frost keycaps use tapered smoky skirts, shallow dished circle/stadium surfaces, rounded lips and softened clover-shaped stem outlines beneath a translucent surface. The photograph does not establish machining tolerances, exact groove count or actual LED state; these remain visual approximations. Existing key addresses and device-writing behavior are unchanged.
+
+### LED light study
+
+The recessed lenses use emissive material, additive surface halos and local point lights; these rotate with the case and remain occluded from the back. An LED close-up frames the roller/indicator corner. The editor offers brightness, light-spill and pause controls. Animated previews stop flashing under reduced motion and do not keep rendering when offscreen. The fast example is 2.5 Hz, not a claimed firmware cadence.
+
+- **Automatic:** a successful USB VIA response enables the manual's default red connection-light representation. Disconnect events clear the connection; no Bluetooth/Num Lock/battery telemetry is inferred. It is explicitly an expected appearance, not a live LED reading. User-customized VIA colors can differ.
+- **Manual reference:** printed p03 gives wired red; p04 specifies holding pairing combinations for 3–5 seconds until rapid flashing, without exact cadence or wireless-slot colors; p09 permits changing the indicator color in VIA; p11 gives two green lights for ≥50%, one green for 30–49%, one yellow below 30%, flashing red for low voltage. One-light battery position is unspecified and labeled illustrative.
+- **Simulation:** BT1/2/3 and 2.4GHz pairing, chosen colors, Num Lock white, battery states and low-voltage warning are user-selected screen examples. These controls neither initiate OS pairing nor send lighting commands to the device. Charging/reconnection patterns are not fabricated.
+
+The guide's connection animation now uses only the connection indicator and identifies wireless colors as examples. See `app/kine-led.ts` for the deterministic state/pulse model.
+
 ## Controls and compatibility
 
 Drag with one pointer to orbit; wheel/two-finger pinch to zoom. Buttons select top, underside, left/right, USB edge or three-quarter views. Canvas keyboard controls: arrows rotate, +/− zoom, Home resets. Selecting a modeled key opens its existing inspector. All A/B/C/D plates, mirrored arrangements and 0/90/180/270° orientations retain matrix addresses.
 
 Three.js loads on demand. A single renderer is retained across key-test updates. Geometry and textures are disposed when rebuilding or unmounting; rendering idles when no movement or input changes exist, and pauses offscreen. Reduced-motion settings disable transition motion and turn off automatic rotation when enabled by the OS.
 
-Run `node scripts/verify-kine-model.mjs` to verify all 32 plate/mirror/rotation combinations, bounds, non-overlap, matrix identity, selectable key centers and underside occlusion. Type-check with `npx tsc --noEmit --incremental false` and build with `npm run build`.
+Run `node scripts/verify-kine-model.mjs` to verify all 32 plate/mirror/rotation combinations, bounds, non-overlap, matrix identity, selectable key centers, underside occlusion, recessed indicator lenses, roller exposure, solid finger-pocket floors, open side undercuts, dished cap profiles and finite mesh attributes. Type-check with `npx tsc --noEmit --incremental false` and build with `npm run build`.
