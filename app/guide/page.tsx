@@ -17,7 +17,7 @@ const manualUrl = 'https://cdn.shopify.com/s/files/1/0815/1800/2452/files/Nova_K
 
 const contents = [
   ['device','장치 도면'], ['start','빠른 시작'], ['connect','연결 방법'], ['keys','조합키'],
-  ['via','VIA 설정'], ['layout','플레이트 배열'], ['firmware','펌웨어'], ['package','구성품'],
+  ['actions','앱·웹·AI 실행'], ['via','VIA 설정'], ['layout','플레이트 배열'], ['firmware','펌웨어'], ['package','구성품'],
 ];
 
 function Combo({ keys, title, copy }: { keys:string[]; title:string; copy:string }) {
@@ -80,8 +80,21 @@ export default function GuidePage() {
             </div><div className="warning"><b>DFU 진입</b><p><kbd>Print</kbd>를 누른 상태에서 USB-C 케이블을 꽂으면 펌웨어 업데이트용 이동식 드라이브가 나타납니다. 일반 사용 중에는 실행하지 마세요.</p></div></div>
           </section>
 
+          <section id="actions" className="guide-section">
+            <div className="section-number">05</div><div className="section-copy"><p className="guide-eyebrow">ACTIONS · WINDOWS FIRST</p><h2>이제 실제 액션을 연결하세요</h2>
+              <h3>설치 없이 사이트 안에서</h3><p>키를 선택하고 액션 유형을 지정하세요. 「웹사이트」에는 전체 웹주소, 「키보드」에는 Ctrl+Shift+S 같은 Windows 단축키를 입력합니다. 「AI·에이전트」는 사용할 AI 페이지와 지시문, 「시스템 → Copy text」는 복사할 텍스트를 설정합니다. 「저장 전 사이트에서 실행 테스트」로 먼저 확인한 뒤 「브라우저에 키 설정 저장」을 누르세요.</p>
+              <p>USB-C로 기기에 적용한 뒤 키 테스트를 OFF, 사이트 실행 모드를 ON으로 전환하세요. 이 탭을 선택한 상태에서 실제 키를 누르면 저장한 액션을 처리합니다. 입력창 편집 중, 키 테스트 중, 다른 탭이나 프로그램에서는 실행하지 않습니다. 다른 키보드에서 같은 F13~F24 조합을 눌러도 반응할 수 있습니다.</p>
+              <h3>Photoshop 등 Windows 프로그램 실행</h3><p>앱 유형을 선택하고 Windows에 설치된 실제 .exe 경로를 넣습니다. 탐색기에서 실행 파일을 우클릭 → 「경로로 복사」를 이용하세요. 브라우저의 파일 선택 창은 전체 경로를 알려주지 않으므로 자동 검색을 제공하지 않습니다.</p>
+              <div className="step-list"><div><b>1</b><span><strong>세부 설정 저장 → 기기에 적용</strong><small>프로그램 키에는 전용 F13~F24 조합이 기록됩니다. HOME/FN과 BT 보호 키는 유지합니다.</small></span></div><div><b>2</b><span><strong>AutoHotkey v2 한 번 설치</strong><small>사용할 Windows PC마다 공식 배포본을 설치하세요. 생성되는 설정 파일은 관리자 권한이나 자동 시작을 요청하지 않습니다. 회사 PC에서는 설치 정책을 확인하세요.</small></span></div><div><b>3</b><span><strong>Windows 실행 파일 받기 → 검토 → 실행</strong><small>사이트에서 저장한 설정으로 .ahk 파일을 만듭니다. 사이트 실행 모드는 OFF로 두세요. PC에서 이 파일이 실행 중이면 USB·Bluetooth 모두 사용할 수 있습니다.</small></span></div></div>
+              <p>단축키는 키패드 자체가 보내므로 AutoHotkey가 필요 없습니다. 앱·웹·지시문·매크로는 .ahk 파일이 처리합니다. 프리셋이나 배열을 바꾸면 기기에 다시 적용하고 파일도 다시 받으세요. 여러 파일을 동시에 실행하지 마세요. 종료는 작업 표시줄의 AutoHotkey 아이콘 → Exit입니다.</p>
+              <h3>AI와 매크로의 범위</h3><p>AI 액션은 지시문 복사와 AI 페이지 열기까지입니다. AI 서비스에서 직접 붙여넣고 전송하며, 응답이나 작업 완료 상태를 수집하지 않습니다. API 키나 비밀번호를 설정에 넣지 마세요. 매크로는 텍스트·웹주소·대기 1~16단계를 저장합니다. 사이트에서는 팝업·클립보드 권한 때문에 단계별 버튼으로 실행하고, Windows 파일에서는 순차 자동 실행합니다. Windows의 텍스트 단계는 현재 선택된 앱에 입력되므로 대상 창과 대기 시간을 먼저 확인하세요.</p>
+              <aside className="callout"><b>‘기기 적용’과 ‘실행’은 다릅니다</b><p>기기 적용은 키코드 기록·읽기 검증입니다. 미설정 키는 기존 값을 유지하고 제외 개수를 표시합니다. 프로그램 존재 여부와 Windows 파일의 실제 동작은 대상 PC에서 확인해야 합니다. 자동 AI 작업, 임의 터미널 명령, 외부 에이전트 승인·중지 연동은 포함하지 않습니다.</p></aside>
+              <div className="resource-row"><a href="https://www.autohotkey.com/" target="_blank" rel="noreferrer">AutoHotkey 공식 사이트 ↗</a><a href="https://developer.mozilla.org/en-US/docs/Web/API/Window/open" target="_blank" rel="noreferrer">브라우저 팝업 제한 ↗</a></div>
+            </div>
+          </section>
+
           <section id="via" className="guide-section">
-            <div className="section-number">05</div><div className="section-copy"><p className="guide-eyebrow">VIA CONFIGURATION</p><h2>VIA 키맵 설정</h2><div className="via-flow"><span>JSON 다운로드</span><i>→</i><span>Design에서 로드</span><i>→</i><span>Test Matrix</span><i>→</i><span>Configure</span></div>
+            <div className="section-number">06</div><div className="section-copy"><p className="guide-eyebrow">VIA CONFIGURATION</p><h2>VIA 키맵 설정</h2><div className="via-flow"><span>JSON 다운로드</span><i>→</i><span>Design에서 로드</span><i>→</i><span>Test Matrix</span><i>→</i><span>Configure</span></div>
               <div className="via-profile-panel"><div className="via-profile-head"><div><p>DEVICE DEFINITION</p><h3>{LK_KINE_PROFILE.name}</h3></div><div><span>VID <b>{LK_KINE_PROFILE.vendorIdHex}</b></span><span>PID <b>{LK_KINE_PROFILE.productIdHex}</b></span><span>MATRIX <b>{LK_KINE_PROFILE.matrix.rows}×{LK_KINE_PROFILE.matrix.cols}</b></span><span>ENCODER <b>{LK_KINE_PROFILE.encoder}</b></span></div></div><div className="via-keycodes">{LK_KINE_PROFILE.customKeycodes.slice(0,8).map(([code,label,copy])=><span key={code}><code>{code}</code><b>{label}</b><small>{copy}</small></span>)}</div></div>
               <h3>일반 키 변경</h3><p>VIA 왼쪽의 Configure에서 변경할 키를 선택하고 아래 키 목록에서 새 키값을 선택합니다. 설정 전 Key Tester에서 실제 스위치 위치가 화면 배열과 맞는지 먼저 확인하세요.</p>
               <h3>오른쪽 위 Home/Fn 키 변경</h3><p>이 키는 레이어 탭 기능이 포함된 <code>LT(2,KC_HOME)</code>입니다. 전체 코드를 일반 키로 바꾸면 Fn 조합이 사라집니다. 짧게 누르는 기능만 Enter로 바꾸려면 Any에서 두 번째 값만 바꿔 <code>LT(2,KC_ENT)</code>처럼 유지합니다.</p>
@@ -93,18 +106,18 @@ export default function GuidePage() {
           </section>
 
           <section id="layout" className="guide-section">
-            <div className="section-number">06</div><div className="section-copy"><p className="guide-eyebrow">LAYOUT</p><h2>플레이트와 방향</h2><p>Plate A/B/C는 2U 키 위치가 다른 21키 배열이며 좌우 미러가 가능합니다. Plate D는 24개의 1U 키를 사용하는 직교 배열입니다. 버튼으로 실제 점유 칸과 가로 회전 결과를 비교하세요.</p><PlateExplorer/>
+            <div className="section-number">07</div><div className="section-copy"><p className="guide-eyebrow">LAYOUT</p><h2>플레이트와 방향</h2><p>Plate A/B/C는 2U 키 위치가 다른 21키 배열이며 좌우 미러가 가능합니다. Plate D는 24개의 1U 키를 사용하는 직교 배열입니다. 버튼으로 실제 점유 칸과 가로 회전 결과를 비교하세요.</p><PlateExplorer/>
             {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a className="config-cta" href="/">Configurator에서 배열·미러·회전 설정하기 →</a>
           </div>
           </section>
 
           <section id="firmware" className="guide-section">
-            <div className="section-number">07</div><div className="section-copy"><p className="guide-eyebrow">FIRMWARE UPDATE</p><h2>BIN 펌웨어 업데이트</h2><ol className="firmware-list"><li>LUMINKEY 자료실에서 NOVA KINE용 BIN 파일을 내려받습니다.</li><li>왼쪽 위 <kbd>Print</kbd> 키를 누른 상태로 USB-C 케이블을 연결합니다.</li><li>컴퓨터에 나타난 이동식 USB 드라이브에 BIN 파일을 복사합니다.</li><li>진행이 완료되고 드라이브가 자동으로 사라질 때까지 기다립니다.</li><li>표시등이 다시 켜지면 케이블을 분리했다가 다시 연결합니다.</li></ol><div className="danger"><b>업데이트 중 케이블을 분리하지 마세요.</b><p>드라이브가 자동으로 사라지기 전에 케이블을 빼거나 창을 강제로 닫으면 업데이트에 실패할 수 있습니다. 제품에 맞는 제조사 BIN 파일만 사용하세요.</p></div></div>
+            <div className="section-number">08</div><div className="section-copy"><p className="guide-eyebrow">FIRMWARE UPDATE</p><h2>BIN 펌웨어 업데이트</h2><ol className="firmware-list"><li>LUMINKEY 자료실에서 NOVA KINE용 BIN 파일을 내려받습니다.</li><li>왼쪽 위 <kbd>Print</kbd> 키를 누른 상태로 USB-C 케이블을 연결합니다.</li><li>컴퓨터에 나타난 이동식 USB 드라이브에 BIN 파일을 복사합니다.</li><li>진행이 완료되고 드라이브가 자동으로 사라질 때까지 기다립니다.</li><li>표시등이 다시 켜지면 케이블을 분리했다가 다시 연결합니다.</li></ol><div className="danger"><b>업데이트 중 케이블을 분리하지 마세요.</b><p>드라이브가 자동으로 사라지기 전에 케이블을 빼거나 창을 강제로 닫으면 업데이트에 실패할 수 있습니다. 제품에 맞는 제조사 BIN 파일만 사용하세요.</p></div></div>
           </section>
 
           <section id="package" className="guide-section">
-            <div className="section-number">08</div><div className="section-copy"><p className="guide-eyebrow">IN THE BOX</p><h2>기본 구성품</h2><div className="package-grid">{[['NOVA KINE','1'],['데이터 케이블','1'],['교체 플레이트','3'],['2.4G 수신기','1'],['1U 여분 키캡','6'],['여분 스위치','3'],['T6 드라이버','1'],['여분 나사 세트','1'],['키캡·스위치 풀러','1'],['빠른 시작 안내서','1']].map(([name,count])=><span key={name}><b>{name}</b><em>× {count}</em></span>)}</div></div>
+            <div className="section-number">09</div><div className="section-copy"><p className="guide-eyebrow">IN THE BOX</p><h2>기본 구성품</h2><div className="package-grid">{[['NOVA KINE','1'],['데이터 케이블','1'],['교체 플레이트','3'],['2.4G 수신기','1'],['1U 여분 키캡','6'],['여분 스위치','3'],['T6 드라이버','1'],['여분 나사 세트','1'],['키캡·스위치 풀러','1'],['빠른 시작 안내서','1']].map(([name,count])=><span key={name}><b>{name}</b><em>× {count}</em></span>)}</div></div>
           </section>
 
           <footer className="guide-footer"><div><strong>AI PAD</strong><p>본 페이지는 LUMINKEY NOVA KINE 공식 사용자 설명서를 바탕으로 재구성한 한국어 요약 가이드입니다.</p></div><a href={manualUrl} target="_blank" rel="noreferrer">원본 설명서 확인 ↗</a></footer>

@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import KineScene from './kine-scene';
 import { useKeySound } from './use-key-sound';
+import ActionEditor from './action-editor';
+import { ActionRunner, type ActionRunnerHandle } from './action-runner';
+import { actionIssue, assignmentIssue, deviceKeycode, sanitizeActionSettings, type ActionType, type ActionSettings } from './deck-actions';
 import {
   isLkKine,
   LK_KINE_AUXILIARY,
@@ -18,14 +21,12 @@ import {
   type Rotation,
 } from './lk-kine-profile';
 import {
-  qmkKeycodeForAction,
   qmkKeycodeMatchesDomEvent,
   ViaWebHidClient,
   type LkKineHidApi,
   type LkKineHidDevice,
 } from './via-webhid';
 
-type ActionType = 'keyboard' | 'application' | 'ai' | 'agent' | 'macro' | 'system';
 type KeyConfig = {
   id: string;
   label: string;
@@ -36,6 +37,7 @@ type KeyConfig = {
   confirm: boolean;
   hud: boolean;
   tone?: 'dark' | 'lime';
+  settings?: ActionSettings;
 };
 type Layer = { id: string; name: string; short: string; keys: KeyConfig[] };
 type Macro = { id: string; name: string; steps: string[] };
@@ -126,12 +128,32 @@ const normalizeConfig = (candidate: DeckConfig): DeckConfig => {
   const defaults = createDefaultConfig();
   return {
     ...candidate,
-    hardware: { ...defaultHardware, ...(candidate.hardware ?? {}) },
+    profile: typeof candidate.profile==='string'?candidate.profile:defaults.profile,
+    hardware: {
+      plate:['A','B','C','D'].includes(candidate.hardware?.plate??'')?candidate.hardware!.plate:defaultHardware.plate,
+      mirrored:typeof candidate.hardware?.mirrored==='boolean'?candidate.hardware.mirrored:false,
+      rotation:[0,90,180,270].includes(candidate.hardware?.rotation??-1)?candidate.hardware!.rotation:defaultHardware.rotation,
+      connectionMode:['usb','2.4g','bluetooth'].includes(candidate.hardware?.connectionMode??'')?candidate.hardware!.connectionMode:'usb',
+    },
     via: viaProfile,
     layers: defaults.layers.map((defaultLayer) => {
       const saved = candidate.layers.find((layer) => layer.id === defaultLayer.id);
       if (!saved) return defaultLayer;
-      return enforceProtectedBluetoothKeys({ ...saved, keys: defaultLayer.keys.map((fallback, index) => saved.keys[index] ?? fallback) });
+      return enforceProtectedBluetoothKeys({ ...defaultLayer, keys: defaultLayer.keys.map((fallback, index) => {
+        const item=saved.keys?.[index];
+        if(!item||typeof item!=='object') return fallback;
+        return {...fallback,id:fallback.id,
+          label:typeof item.label==='string'?item.label.slice(0,10):fallback.label,
+          glyph:typeof item.glyph==='string'?item.glyph.slice(0,3):fallback.glyph,
+          kind:['keyboard','website','application','ai','agent','macro','system'].includes(item.kind)?item.kind:fallback.kind,
+          action:typeof item.action==='string'?item.action:fallback.action,
+          prompt:typeof item.prompt==='string'?item.prompt:'',
+          confirm:typeof item.confirm==='boolean'?item.confirm:true,
+          hud:typeof item.hud==='boolean'?item.hud:false,
+          tone:item.tone==='dark'||item.tone==='lime'?item.tone:undefined,
+          settings:sanitizeActionSettings(item.settings),
+        };
+      }) });
     }),
   };
 };
@@ -142,14 +164,15 @@ const profilePresets = [
   { name: 'Design Lab', layerId: 'design', description: 'Figma·Adobe·에셋 작업' },
 ] as const;
 
-const typeLabels: Record<ActionType,string> = { keyboard:'키보드', application:'앱', ai:'AI', agent:'에이전트', macro:'매크로', system:'시스템' };
+const typeLabels: Record<ActionType,string> = { keyboard:'키보드', website:'웹사이트', application:'앱', ai:'AI', agent:'에이전트', macro:'매크로', system:'시스템' };
 const actionOptions: Record<ActionType,string[]> = {
-  keyboard:['⌘C','⌘V','⌘Z','⇧⌘Z','⌘S','⇧⌘4','⌘Space','사용자 지정 단축키'],
+  keyboard:['Ctrl+C','Ctrl+V','Ctrl+Z','Ctrl+Shift+Z','Ctrl+S','Win+Shift+S','Win+S','사용자 지정 단축키'],
+  website:['Open website'],
   application:['Open Codex','Open Claude Code','Open ChatGPT','Open Figma','Open Photoshop','Open Illustrator','Open Premiere','Open Finder','Open Browser','Open NAS'],
   ai:['Ask current agent','Analyze error','Debug issue','Review current work','Fix selected output','Refactor selection','Generate image','Generate video','Summarize context','Create handoff summary'],
   agent:['AI Producer','RFP Analyst','Instructional Designer','Script Analyst','Format Proposal','Visual Strategy','Storyboard Planner','Production QA'],
   macro:['Start dev server','Production build','Run test suite','Deploy site','Export deliverable','Custom workflow'],
-  system:['Approve current task','Run selected workflow','Stop active workflow','Retry failed step','Push to talk','Attach files','Open prompt library','Clipboard history'],
+  system:['Copy text','Open website','Clipboard history','Show desktop'],
 };
 
 const defaultInputMatrix: Record<string, MatrixAddress> = {
@@ -169,7 +192,6 @@ export default function Home() {
   const [draft, setDraft] = useState<KeyConfig>(() => createDefaultConfig().layers[0].keys[0]);
   const [toast, setToast] = useState('');
   const [showProfiles, setShowProfiles] = useState(false);
-  const [showMacro, setShowMacro] = useState(false);
   const [showDevice, setShowDevice] = useState(false);
   const [deviceState, setDeviceState] = useState<'idle'|'requesting'|'connected'|'unsupported'|'error'>('idle');
   const [deviceInfo, setDeviceInfo] = useState<{name:string;vid:string;pid:string;protocol:string}|null>(null);
@@ -180,8 +202,7 @@ export default function Home() {
   const [testedKeys, setTestedKeys] = useState<Set<MatrixAddress>>(() => new Set());
   const [testSource, setTestSource] = useState<'matrix'|'keyboard'|'waiting'>('waiting');
   const [applyState, setApplyState] = useState<{status:'idle'|'applying'|'success'|'error';done:number;total:number;message:string}>({status:'idle',done:0,total:0,message:''});
-  const [macroSteps, setMacroSteps] = useState<string[]>(['현재 파일 저장','선택한 에이전트 실행','결과를 HUD에 표시']);
-  const [newStep, setNewStep] = useState('');
+  const actionRunnerRef = useRef<ActionRunnerHandle|null>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const deviceRef = useRef<LkKineHidDevice|null>(null);
   const viaClientRef = useRef<ViaWebHidClient|null>(null);
@@ -220,6 +241,7 @@ export default function Home() {
   const protectedSelected = protectedActions.has(draft.action);
   const hardware = config.hardware ?? defaultHardware;
   const physicalLayout = useMemo(() => transformLkKineLayout(hardware.plate, hardware.mirrored, hardware.rotation), [hardware]);
+  const actionAssignments = useMemo(() => physicalLayout.cells.map((cell,index)=>({key:activeLayer.keys[index],index,matrix:cell.matrix})).filter(item=>item.matrix!==LK_KINE_HOME_FN.address), [physicalLayout.cells,activeLayer]);
   const pressedKeys = useMemo(() => new Set<MatrixAddress>([...matrixPressed, ...domPressed]), [matrixPressed, domPressed]);
   const modelKeys = useMemo(() => [
     ...physicalLayout.cells.map((cell, index) => {
@@ -270,7 +292,7 @@ export default function Home() {
         ...physicalLayout.cells.map((cell,index)=>({address:cell.matrix,item:activeLayer.keys[index],index})),
         ...LK_KINE_AUXILIARY.map((address,index)=>({address,item:activeLayer.keys[24+index],index:24+index})),
       ];
-      const presetMatch = assignments.find(({item,index}) => qmkKeycodeMatchesDomEvent(qmkKeycodeForAction(item?.action ?? '', index), event));
+      const presetMatch = assignments.find(({item,index}) => { const code=deviceKeycode(item,index); return code!==null&&qmkKeycodeMatchesDomEvent(code,event); });
       return presetMatch?.address ?? defaultInputMatrix[event.code];
     };
     const onKeyDown = (event: KeyboardEvent) => {
@@ -296,9 +318,10 @@ export default function Home() {
     setActiveLayerId(next.id); setSelectedKeyId(next.keys[0].id); setDraft(next.keys[0]);
   };
   const selectKey = (item: KeyConfig) => { setSelectedKeyId(item.id); setDraft(item); };
-  const clickKey = (item: KeyConfig) => { keySound.play(); selectKey(item); };
+  const clickKey = (item: KeyConfig) => { keySound.play(); selectKey(item); if(window.innerWidth<=1050) document.getElementById('key-inspector')?.scrollIntoView({block:'start',behavior:'smooth'}); };
   const saveDraft = () => {
     if (protectedActions.has(draft.action)) { flash('무선 연결 보호 키는 프리셋에서 변경할 수 없습니다'); return; }
+    const issue=actionIssue(draft); if(issue) { flash(issue); return; }
     const next: DeckConfig = { ...config, updatedAt:new Date().toISOString(), layers:config.layers.map(layer => layer.id === activeLayerId ? { ...layer, keys:layer.keys.map(item => item.id === draft.id ? draft : item) } : layer) };
     setConfig(next); localStorage.setItem('kbrain-command-deck-v1', JSON.stringify(next)); flash(`${draft.label} 키를 저장했습니다`);
   };
@@ -313,6 +336,7 @@ export default function Home() {
   };
   const importConfig = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]; if (!file) return;
+    if(file.size>1024*1024) { flash('설정 파일은 1MB 이하만 가져올 수 있습니다'); event.target.value=''; return; }
     const reader = new FileReader();
     reader.onload = () => { try { const imported = JSON.parse(String(reader.result)) as DeckConfig; if (imported.version !== 1 || !Array.isArray(imported.layers) || !imported.layers[0]?.keys[0]) throw new Error(); const next=normalizeConfig(imported); const first=next.layers[0].keys[0]; setConfig(next); setActiveLayerId(next.layers[0].id); setSelectedKeyId(first.id); setDraft(first); localStorage.setItem('kbrain-command-deck-v1', JSON.stringify(next)); flash('설정을 가져왔습니다'); } catch { flash('올바른 Command Deck JSON이 아닙니다'); } };
     reader.readAsText(file); event.target.value='';
@@ -327,7 +351,6 @@ export default function Home() {
     setShowProfiles(false);
     flash(`${name} 프리셋을 화면에 불러왔습니다`);
   };
-  const addMacroStep = () => { if (!newStep.trim()) return; setMacroSteps(prev => [...prev, newStep.trim()]); setNewStep(''); };
   const updateHardware = (patch: Partial<HardwareConfig>) => {
     setConfig(prev => {
       const next = { ...prev, hardware:{ ...(prev.hardware??defaultHardware), ...patch }, updatedAt:new Date().toISOString() };
@@ -375,6 +398,8 @@ export default function Home() {
     }
   };
   const applyPresetToDevice = async () => {
+    const conflict = assignmentIssue(actionAssignments);
+    if (conflict) { flash(conflict); return; }
     const client = viaClientRef.current;
     if (!client || deviceState !== 'connected') { setShowDevice(true); flash('먼저 USB-C로 LK-KINE을 연결하세요'); return; }
     let layerCount = 0;
@@ -393,16 +418,18 @@ export default function Home() {
       return;
     }
     const targetLayer = 0;
-    const presetAssignments = physicalLayout.cells
-      .map((cell,index) => ({ layer:targetLayer, address:cell.matrix, keycode:qmkKeycodeForAction(activeLayer.keys[index].action, index), label:activeLayer.keys[index].label }))
-      .filter((assignment) => assignment.address !== LK_KINE_HOME_FN.address);
+    const presetAssignments = actionAssignments.flatMap(({key,index,matrix}) => {
+      const keycode=deviceKeycode(key,index);
+      return keycode===null?[]:[{layer:targetLayer,address:matrix as MatrixAddress,keycode,label:key.label}];
+    });
+    const skipped=actionAssignments.filter(({key})=>actionIssue(key));
     const protectedAssignments = [
       { layer:LK_KINE_HOME_FN.layer, address:LK_KINE_HOME_FN.address, keycode:LK_KINE_HOME_FN.keycode, label:'HOME/FN' },
       ...LK_KINE_FACTORY_WIRELESS_KEYS.map((control) => ({ layer:LK_KINE_WIRELESS_LAYER, ...control })),
       ...Array.from({length:layerCount}, (_, layer) => LK_KINE_BLUETOOTH_AUX.map((control) => ({ layer, ...control }))).flat(),
     ];
     const assignments = [...presetAssignments, ...protectedAssignments];
-    if (!window.confirm(`${config.profile}의 ${activeLayer.name} 프리셋을 기본 Layer 0에 기록합니다.\n\nHOME/FN, Fn+1/2/3·4·5와 우측 BT1/BT2/BT3 키는 모든 레이어에서 자동 보호됩니다. 계속할까요?`)) return;
+    if (!window.confirm(`${config.profile} · ${activeLayer.name}: 설정 완료 ${presetAssignments.length}개를 Layer 0에 기록합니다.\n미설정 ${skipped.length}개는 기존 키코드를 유지합니다${skipped.length?': '+skipped.map(({key})=>key.label).join(', '):''}.\n\n단축키 외의 액션은 사이트 실행 모드 또는 Windows 실행 파일이 있어야 작동합니다. 기록 성공은 프로그램 실행 성공이 아닙니다.\n\nHOME/FN, Fn 조합과 BT1/BT2/BT3는 보호합니다. 계속할까요?`)) return;
     setKeyTestEnabled(false);
     setApplyState({status:'applying',done:0,total:assignments.length,message:'현재 키맵을 백업하고 있습니다'});
     const snapshot = new Map<string, number>();
@@ -420,8 +447,8 @@ export default function Home() {
         }
         setApplyState({status:'applying',done:index+1,total:assignments.length,message:`L${assignment.layer} M[${assignment.address}] ${assignment.label} 검증 완료`});
       }
-      setApplyState({status:'success',done:assignments.length,total:assignments.length,message:'프리셋 + 무선 보호 키 읽기 검증 완료'});
-      flash(`${config.profile} 적용 완료 · BT1/BT2/BT3 보호됨`);
+      setApplyState({status:'success',done:assignments.length,total:assignments.length,message:`키코드 ${presetAssignments.length}개 + 무선 보호 검증 완료 · 미설정 ${skipped.length}개 유지`});
+      flash('키코드 기록 완료 · 앱·웹 액션은 실행 모드 연결 필요');
     } catch (error) {
       for (const assignment of written.reverse()) {
         const previous = snapshot.get(`${assignment.layer}:${assignment.address}`);
@@ -460,7 +487,7 @@ export default function Home() {
           <p className="eyebrow">PROFILE</p>
           <div className="profile-wrap">
             <button className="profile-card" onClick={() => setShowProfiles(value => !value)}>
-              <span>NK</span><div><strong>{config.profile}</strong><small>macOS · NOVA KINE</small></div><b>⌄</b>
+              <span>NK</span><div><strong>{config.profile}</strong><small>Windows · NOVA KINE</small></div><b>⌄</b>
             </button>
             {showProfiles && <div className="profile-menu">
               {profilePresets.map(preset => <button key={preset.name} className={config.profile === preset.name ? 'active' : ''} onClick={() => selectProfile(preset.name,preset.layerId)}><span><b>{preset.name}</b><small>{preset.description}</small></span><em>{config.profile === preset.name ? '✓' : '→'}</em></button>)}
@@ -491,7 +518,7 @@ export default function Home() {
 
           <div className="device-view-switch" aria-label="키패드 표시 방식">
             <div className="key-sound-controls"><label title="화면의 키를 클릭할 때 합성 기계식 키음 재생"><input type="checkbox" checked={keySound.enabled} onChange={e => keySound.toggle(e.target.checked)} />키음</label><label className="key-sound-volume">음량<input type="range" aria-label="키음 음량" min="0" max="100" step="5" value={keySound.volume} disabled={!keySound.enabled} onChange={e => keySound.changeVolume(Number(e.target.value))} /><output>{keySound.volume}%</output></label>{keySound.unavailable && <small role="status">브라우저의 소리 재생 권한을 확인하세요</small>}</div>
-            <button aria-pressed={deviceView==='3d'} onClick={() => setDeviceView('3d')}>3D 제품 보기</button><button aria-pressed={deviceView==='2d'} onClick={() => setDeviceView('2d')}>2D 키맵</button>
+            <button onClick={()=>document.getElementById('key-inspector')?.scrollIntoView({block:'start',behavior:'smooth'})}>키 세부 설정 ↓</button><button onClick={()=>document.getElementById('action-runner')?.scrollIntoView({block:'center',behavior:'smooth'})}>실행 모드 ↓</button><button aria-pressed={deviceView==='3d'} onClick={() => setDeviceView('3d')}>3D 제품 보기</button><button aria-pressed={deviceView==='2d'} onClick={() => setDeviceView('2d')}>2D 키맵</button>
           </div>
           <div className="device-stage"><div>
             <div className="device-label"><span>NOVA KINE · PLATE {hardware.plate}</span><small>{hardware.rotation===90||hardware.rotation===270?'LANDSCAPE':'PORTRAIT'} · {hardware.mirrored?'RIGHT MIRROR':'LEFT STANDARD'} · {physicalLayout.cells.length} KEYS + 3 AUX + E0</small></div>
@@ -508,22 +535,23 @@ export default function Home() {
             </div>}
             <div className={`test-readout ${keyTestEnabled?'active':''} ${applyState.status}`}><span><i/>{keyTestEnabled ? pressedKeys.size ? `입력 감지 · ${[...pressedKeys].map(value=>`M[${value}]`).join(' ')}` : testSource==='keyboard' ? '브라우저 키 입력 대기 · VIA Matrix 보안 모드' : '실제 키를 눌러 매트릭스를 확인하세요' : '키 테스트 꺼짐'}</span><b>{applyState.message || (deviceState==='connected' ? `VIA ${deviceInfo?.protocol}` : 'USB-C 연결 필요')}</b></div>
           </div></div>
+          <ActionRunner key={`${activeLayer.id}-${hardware.plate}-${hardware.mirrored}`} ref={actionRunnerRef} assignments={actionAssignments} testing={keyTestEnabled||applyState.status==='applying'} profile={`${config.profile} / ${activeLayer.name}`}/>
           <footer className="status-strip"><span><i className={deviceState==='connected'?'live':''} /> {deviceState==='connected'?'LK-KINE VIA 연결됨':'오프라인 설계 모드'}</span><span>{physicalLayout.cells.length} KEYS · BT SAFE ×3 · E0</span><span>Matrix 5×12 · Plate {hardware.plate} · {hardware.rotation}°</span><button onClick={checkSync}>{deviceInfo?'키 테스트':'장치 연결'} ↗</button></footer>
         </section>
 
-        <aside className="inspector">
+        <aside id="key-inspector" className="inspector">
           <p className="eyebrow">SELECTED KEY</p>
           <div className="selected-summary"><span>{draft.glyph}</span><div><strong>{draft.label}</strong><small>{protectedSelected?'WIRELESS SAFE · 변경 잠금':`Key ${String(selectedIndex+1).padStart(2,'0')} · Layer ${String(config.layers.indexOf(activeLayer)+1).padStart(2,'0')}`}</small></div></div>
           {protectedSelected ? <div className="protected-key-note"><b>무선 연결 보호 키</b><p>{draft.action==='LT(2,KC_HOME)'?'짧게 누르면 Home, 길게 누르면 제조사 Layer 2가 열립니다. 이 키를 보존해야 기존 Home + 1/2/3 페어링 조합을 계속 사용할 수 있습니다.':`${draft.label}는 LK-KINE 펌웨어의 ${draft.action} 키코드를 직접 실행합니다. 짧게 눌러 채널을 전환하고 3-5초 길게 눌러 해당 슬롯을 페어링하세요.`}</p><span>모든 프리셋과 장치 레이어에 자동 적용됩니다.</span></div> : <>
             <div className="field-pair"><div><label htmlFor="label">키 라벨</label><input id="label" value={draft.label} onChange={e => setDraft({...draft,label:e.target.value.toUpperCase().slice(0,10)})} /></div><div><label htmlFor="glyph">아이콘</label><input id="glyph" value={draft.glyph} onChange={e => setDraft({...draft,glyph:e.target.value.slice(0,3)})} /></div></div>
             <label>액션 유형</label>
-            <div className="type-grid">{(Object.keys(typeLabels) as ActionType[]).map(kind => <button key={kind} className={draft.kind===kind?'active':''} onClick={() => setDraft({...draft,kind,action:actionOptions[kind][0]})}>{typeLabels[kind]}</button>)}</div>
+            <div className="type-grid">{(Object.keys(typeLabels) as ActionType[]).map(kind => <button key={kind} className={draft.kind===kind?'active':''} onClick={() => setDraft({...draft,kind,action:actionOptions[kind][0],settings:{}})}>{typeLabels[kind]}</button>)}</div>
             <label htmlFor="action">실행 액션</label>
-            <select id="action" value={draft.action} onChange={e => setDraft({...draft,action:e.target.value})}>{Array.from(new Set([draft.action,...actionOptions[draft.kind]])).map(option => <option key={option}>{option}</option>)}</select>
+            <select id="action" value={draft.action} onChange={e => setDraft({...draft,action:e.target.value,settings:{}})}>{Array.from(new Set([draft.action,...actionOptions[draft.kind]])).map(option => <option key={option}>{option}</option>)}</select>
             {(draft.kind==='ai'||draft.kind==='agent') && <><label htmlFor="prompt">지시문</label><textarea id="prompt" value={draft.prompt} placeholder="에이전트에게 전달할 지시문을 입력하세요" onChange={e => setDraft({...draft,prompt:e.target.value})} /></>}
-            {draft.kind==='macro' && <button className="secondary-wide" onClick={() => setShowMacro(true)}>워크플로 매크로 편집 ↗</button>}
-            <div className="toggle-row"><div><strong>실행 전 확인</strong><small>중요 명령의 오작동을 방지합니다</small></div><button aria-label="실행 전 확인" className={`toggle ${draft.confirm?'on':''}`} onClick={() => setDraft({...draft,confirm:!draft.confirm})}><span /></button></div>
-            <div className="toggle-row"><div><strong>HUD에 상태 표시</strong><small>Agent HUD로 진행 상태를 보냅니다</small></div><button aria-label="HUD 상태 표시" className={`toggle ${draft.hud?'on':''}`} onClick={() => setDraft({...draft,hud:!draft.hud})}><span /></button></div>
+            <ActionEditor value={draft} index={selectedIndex} onChange={setDraft} onTest={()=>{actionRunnerRef.current?.test(draft);document.getElementById('action-runner')?.scrollIntoView({block:'center',behavior:'smooth'});}}/>
+            <div className="toggle-row"><div><strong>실행 전 확인</strong><small>사이트·Windows 파일 실행 시 확인 · 직접 단축키 제외</small></div><button aria-label="실행 전 확인" className={`toggle ${draft.confirm?'on':''}`} onClick={() => setDraft({...draft,confirm:!draft.confirm})}><span /></button></div>
+            <div className="toggle-row"><div><strong>Windows 실행 알림</strong><small>실행 요청 전달 결과만 알림 · AI 작업 완료 감지 아님</small></div><button aria-label="Windows 실행 알림" className={`toggle ${draft.hud?'on':''}`} onClick={() => setDraft({...draft,hud:!draft.hud})}><span /></button></div>
             <button className="save-button" onClick={saveDraft}>브라우저에 키 설정 저장</button>
           </>}
         </aside>
@@ -538,7 +566,7 @@ export default function Home() {
             {([
               ['usb','USB-C','동기화 권장','케이블 연결 · Wired 모드'],
               ['2.4g','2.4 GHz','입력 + 진단','동글 연결 후 HID 확인'],
-              ['bluetooth','Bluetooth','입력 중심','macOS에서 먼저 페어링'],
+              ['bluetooth','Bluetooth','입력 중심','Windows에서 먼저 페어링'],
             ] as [ConnectionMode,string,string,string][]).map(([mode,title,badge,copy]) => <button key={mode} className={hardware.connectionMode===mode?'active':''} onClick={() => updateHardware({connectionMode:mode})}><b>{title}</b><em>{badge}</em><span>{copy}</span></button>)}
           </div>
           <div className={`device-state-card ${deviceState}`}>
@@ -559,15 +587,6 @@ export default function Home() {
         </section>
       </div>}
 
-      {showMacro && <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowMacro(false)}>
-        <section className="macro-modal" role="dialog" aria-modal="true" aria-labelledby="macro-title" onMouseDown={e => e.stopPropagation()}>
-          <header><div><p className="eyebrow">WORKFLOW MACRO</p><h2 id="macro-title">{draft.kind==='macro'?draft.action:'Custom workflow'}</h2></div><button aria-label="닫기" onClick={() => setShowMacro(false)}>×</button></header>
-          <p className="modal-copy">여러 동작을 순서대로 묶어 하나의 키로 실행합니다. 실제 실행은 Local Bridge가 담당합니다.</p>
-          <div className="steps">{macroSteps.map((step,index) => <div className="macro-step" key={`${step}-${index}`}><b>{String(index+1).padStart(2,'0')}</b><span>{step}</span><button onClick={() => setMacroSteps(items => items.filter((_,i)=>i!==index))}>삭제</button></div>)}</div>
-          <div className="add-step"><input value={newStep} onChange={e => setNewStep(e.target.value)} onKeyDown={e => e.key==='Enter'&&addMacroStep()} placeholder="새 단계 입력" /><button onClick={addMacroStep}>＋ 추가</button></div>
-          <footer><span>{macroSteps.length} steps · 순차 실행</span><button onClick={() => { setShowMacro(false); flash('매크로를 저장했습니다'); }}>매크로 저장</button></footer>
-        </section>
-      </div>}
     </main>
   );
 }

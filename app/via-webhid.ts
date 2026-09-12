@@ -135,7 +135,13 @@ export const qmkKeycodeToDomCode = (keycode: number) => {
   if (base >= 0x04 && base <= 0x1d) return `Key${String.fromCharCode(65 + base - 0x04)}`;
   if (base >= 0x1e && base <= 0x26) return `Digit${base - 0x1d}`;
   if (base === 0x27) return 'Digit0';
-  if (base === 0x2c) return 'Space';
+  const names: Record<number,string> = {
+    0x28:'Enter', 0x29:'Escape', 0x2a:'Backspace', 0x2b:'Tab', 0x2c:'Space',
+    0x2d:'Minus', 0x2e:'Equal', 0x4a:'Home', 0x4b:'PageUp', 0x4c:'Delete',
+    0x4d:'End', 0x4e:'PageDown', 0x4f:'ArrowRight', 0x50:'ArrowLeft', 0x51:'ArrowDown', 0x52:'ArrowUp',
+    0xa8:'AudioVolumeMute', 0xa9:'AudioVolumeUp', 0xaa:'AudioVolumeDown',
+  };
+  if (names[base]) return names[base];
   if (base >= 0x3a && base <= 0x45) return `F${1 + base - 0x3a}`;
   if (base >= 0x68 && base <= 0x73) return `F${13 + base - 0x68}`;
   return undefined;
