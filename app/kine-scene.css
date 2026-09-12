@@ -21,6 +21,17 @@
 .kine-canvas { height:clamp(390px,41vw,560px); width:100%; }
 .kine-canvas canvas { display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
 .kine-canvas canvas:active { cursor:grabbing; }
+.kine-tour-bar { display:flex; flex-wrap:wrap; align-items:center; gap:10px 18px; padding:14px 16px; background:#e9efea; border-top:1px solid #ccd6ce; }
+.kine-tour-bar>div { display:grid; gap:5px; flex:1; min-width:180px; }
+.kine-tour-bar span { font:500 12px var(--font-geist-mono),monospace; letter-spacing:.1em; color:#617167; }
+.kine-tour-bar strong { font-size:14px; font-weight:500; color:#24362b; }
+.kine-tour-bar button { border:1px solid #9aad9d; border-radius:6px; padding:9px 13px; background:#f8fbf8; font-size:14px; color:#263e30; }
+.kine-tour-bar button:disabled { opacity:.5; cursor:default; }
+.kine-tour-bar small { flex-basis:100%; font-size:12px; color:#58695d; }
+.kine-cinematic .kine-tour-bar { background:#182330; border-color:#3c4f63; }
+.kine-cinematic .kine-tour-bar span,.kine-cinematic .kine-tour-bar small { color:#acbece; }
+.kine-cinematic .kine-tour-bar strong { color:#f1f5f9; }
+.kine-cinematic .kine-tour-bar button { border-color:#597086; background:#25374a; color:#ecf4fb; }
 .kine-studio-controls { display:flex; flex-wrap:wrap; align-items:center; gap:12px 18px; padding:14px 16px; border-top:1px solid #d9dfda; background:#eef1ed; font-size:14px; }
 .kine-light-modes { display:flex; gap:3px; padding:3px; border:1px solid #c9d0c5; border-radius:8px; background:#e2e7df; }
 .kine-light-modes button { padding:8px 12px; border:0; border-radius:5px; background:transparent; font-size:14px; color:#52604d; }
