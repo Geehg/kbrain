@@ -1,4 +1,4 @@
-# KBRAIN AI Command Deck
+# LUMINKEY · NOVA KINE Tri-Mode Keyboard
 
 LUMINKEY NOVA KINE을 위한 AI 작업용 키맵·매크로 configurator입니다. 실제 Plate A–D 배열, 좌우 미러, 0°/90°/180°/270° 회전, USB-C·2.4GHz·Bluetooth 연결 상태를 한 화면에서 설계하고 설정 파일로 내보낼 수 있습니다.
 

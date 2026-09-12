@@ -29,6 +29,8 @@ const COMMAND = {
   getKeycode: 0x04,
   setKeycode: 0x05,
   layerCount: 0x11,
+  getEncoder: 0x14,
+  setEncoder: 0x15,
 } as const;
 
 const MATRIX_STATE = 0x03;
@@ -78,7 +80,8 @@ export class ViaWebHidClient {
 
   async getLayerCount() {
     const response = await this.exchange(COMMAND.layerCount);
-    return response[1] || 4;
+    if (response.length < 2 || !response[1] || response[1] > 32) throw new Error('장치 레이어 수를 확인하지 못했습니다.');
+    return response[1];
   }
 
   async getMatrixState(): Promise<Set<MatrixAddress>> {
@@ -106,6 +109,21 @@ export class ViaWebHidClient {
     await this.exchange(COMMAND.setKeycode, [layer, row, col, keycode >> 8, keycode & 0xff]);
     const readback = await this.getKeycode(layer, address);
     if (readback !== keycode) throw new Error(`M[${address}] 키코드 검증에 실패했습니다.`);
+  }
+
+  async getEncoderKeycode(layer: number, clockwise: boolean) {
+    try {
+      const response = await this.exchange(COMMAND.getEncoder, [layer, 0, Number(clockwise)]);
+      if (response.length < 6 || response[1] !== layer || response[2] !== 0 || response[3] !== Number(clockwise)) throw new Error('잘못된 엔코더 응답');
+      return (response[4] << 8) | response[5];
+    } catch {
+      throw new Error('E0 휠 설정 지원을 확인하지 못했습니다. 「기기 휠 설정 유지」를 선택하면 키만 적용할 수 있습니다.');
+    }
+  }
+
+  async setEncoderKeycode(layer: number, clockwise: boolean, keycode: number) {
+    await this.exchange(COMMAND.setEncoder, [layer, 0, Number(clockwise), keycode >> 8, keycode & 0xff]);
+    if (await this.getEncoderKeycode(layer, clockwise) !== keycode) throw new Error(`E0 ${clockwise ? 'CW' : 'CCW'} 휠 설정 검증에 실패했습니다.`);
   }
 }
 
@@ -137,7 +155,7 @@ export const qmkKeycodeToDomCode = (keycode: number) => {
   if (base === 0x27) return 'Digit0';
   const names: Record<number,string> = {
     0x28:'Enter', 0x29:'Escape', 0x2a:'Backspace', 0x2b:'Tab', 0x2c:'Space',
-    0x2d:'Minus', 0x2e:'Equal', 0x4a:'Home', 0x4b:'PageUp', 0x4c:'Delete',
+    0x2d:'Minus', 0x2e:'Equal', 0x35:'Backquote', 0x38:'Slash', 0x4a:'Home', 0x4b:'PageUp', 0x4c:'Delete',
     0x4d:'End', 0x4e:'PageDown', 0x4f:'ArrowRight', 0x50:'ArrowLeft', 0x51:'ArrowDown', 0x52:'ArrowUp',
     0xa8:'AudioVolumeMute', 0xa9:'AudioVolumeUp', 0xaa:'AudioVolumeDown',
   };

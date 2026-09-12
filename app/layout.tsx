@@ -14,18 +14,16 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://kbrain-ai-command-deck.kuriworks.chatgpt.site'),
-  title: 'KBRAIN AI Command Deck',
+  title: 'LUMINKEY · NOVA KINE Tri-Mode Keyboard',
   description: 'NOVA KINE을 위한 AI 에이전트 키맵·매크로 configurator',
   openGraph: {
-    title: 'KBRAIN AI Command Deck',
+    title: 'LUMINKEY · NOVA KINE Tri-Mode Keyboard',
     description: 'NOVA KINE Control Configurator',
-    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'KBRAIN AI Command Deck' }],
   },
   twitter: {
-    card: 'summary_large_image',
-    title: 'KBRAIN AI Command Deck',
+    card: 'summary',
+    title: 'LUMINKEY · NOVA KINE Tri-Mode Keyboard',
     description: 'NOVA KINE Control Configurator',
-    images: ['/og.png'],
   },
 };
 

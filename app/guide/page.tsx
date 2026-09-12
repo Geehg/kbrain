@@ -1,15 +1,16 @@
 import type { Metadata } from 'next';
 import { HardwareMap, HeroDevice, PairingCoach, PlateExplorer } from './guide-experience';
 import { LK_KINE_PROFILE } from '../lk-kine-profile';
+import { CODEX_BINDINGS, CODEX_COMMANDS_URL } from '../codex-preset';
+import { ProductBrand, ProductLink } from '../product-brand';
 import './guide.css';
 
 export const metadata: Metadata = {
-  title: 'NOVA KINE 한국어 사용 가이드 | AI PAD',
+  title: 'NOVA KINE 한국어 사용 가이드 | LUMINKEY',
   description: 'NOVA KINE 연결, VIA 설정, 조합키, 표시등과 펌웨어 업데이트 한국어 가이드',
   openGraph: {
     title: 'NOVA KINE 한국어 사용 가이드',
     description: '연결부터 VIA 키맵 설정과 펌웨어 업데이트까지',
-    images: [{ url:'/og.png', width:1200, height:630, alt:'KBRAIN AI Command Deck' }],
   },
 };
 
@@ -17,7 +18,7 @@ const manualUrl = 'https://cdn.shopify.com/s/files/1/0815/1800/2452/files/Nova_K
 
 const contents = [
   ['device','장치 도면'], ['start','빠른 시작'], ['connect','연결 방법'], ['keys','조합키'],
-  ['actions','앱·웹·AI 실행'], ['led-notifications','LED·작업 알림'], ['via','VIA 설정'], ['layout','플레이트 배열'], ['firmware','펌웨어'], ['package','구성품'],
+  ['actions','앱·웹·AI 실행'], ['codex','GPT Codex 전용'], ['led-notifications','LED·작업 알림'], ['via','VIA 설정'], ['layout','플레이트 배열'], ['firmware','펌웨어'], ['package','구성품'],
 ];
 
 function Combo({ keys, title, copy }: { keys:string[]; title:string; copy:string }) {
@@ -29,10 +30,11 @@ export default function GuidePage() {
     <main className="guide-shell">
       <header className="guide-topbar">
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-        <a className="guide-brand" href="/"><strong>AI PAD</strong></a>
+        <a className="guide-brand" href="/" aria-label="NOVA KINE 설정 화면"><ProductBrand /></a>
         <nav>
           {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a href="/">Configurator</a>
+          <ProductLink />
           <a className="active" href="/guide">사용 가이드</a>
         </nav>
         <div className="language-switch" aria-label="언어"><button className="active">KO</button><button disabled title="추후 제공 예정">EN · SOON</button></div>
@@ -107,6 +109,20 @@ export default function GuidePage() {
             </div>
           </section>
 
+          <section id="codex" className="guide-section">
+            <div className="section-number">GPT</div><div className="section-copy"><p className="guide-eyebrow">CODEX DESKTOP · WINDOWS</p><h2>구체적인 Codex 작업 도구로 사용하기</h2>
+              <p>「GPT CODEX」는 기존 AI AGENTS와 별도로 추가한 Windows 데스크톱용 프리셋입니다. 작업 전환과 편집 도구를 직접 키 입력으로 실행하며 기본 구성에는 별도 프로그램이나 API 키가 필요 없습니다. ChatGPT 웹이나 Codex CLI용 키맵은 아닙니다.</p>
+              <div className="step-list"><div><b>1</b><span><strong>GPT CODEX 선택 후 USB로 적용</strong><small>화면에서 키와 E0 휠을 확인하고 「프리셋을 기기에 적용」을 누르세요. 사이트의 프리셋 선택은 미리보기이며, 적용해야 기기 Layer 0가 교체됩니다.</small></span></div><div><b>2</b><span><strong>Windows Codex 창에서 확인</strong><small>NEW → COMMAND → 최근 작업 → REVIEW 순서로 확인하세요. 설치 버전의 설정 → Keyboard Shortcuts와 다르면 키의 Windows 단축키를 수정하고 다시 적용하세요.</small></span></div><div><b>3</b><span><strong>무선으로 사용</strong><small>BT1/2/3으로 Windows에 연결하면 저장된 단축키를 전달합니다. 사이트는 닫아도 됩니다. Fn과 BT 보호 키는 다른 프리셋과 동일하게 유지됩니다.</small></span></div></div>
+              <h3>각 키가 실제로 하는 일</h3><p>Plate A·B·C는 아래 첫 21개 위치를 사용하며 Home/Fn을 제외한 20개가 설정 키입니다. Plate D에는 마지막 3개가 추가됩니다. 가로·세로 회전은 표시 방향만 바꾸며 해당 키의 매트릭스 주소는 유지합니다.</p>
+              <div className="combo-grid">{CODEX_BINDINGS.map(([label, shortcut, description]) => <Combo key={label} keys={[shortcut]} title={label} copy={description}/>)}</div>
+              <h3>휠 E0 · 양방향 설정</h3><p>기본은 이전 / 다음 작업·탭 전환입니다. 글자 크기 또는 PageUp/PageDown으로 바꿀 수 있습니다. 시계·반시계는 기기 기준이며 화면 회전으로 뒤집지 않습니다. VIA의 엔코더 읽기·쓰기 명령을 지원하는 펌웨어에서만 기록하고 다시 읽어 검증합니다. 지원 확인이 실패하면 키를 포함해 기록 전에 중단합니다. 이때 「기기 휠 설정 유지」로 바꾸고 키만 적용하세요.</p>
+              <aside className="callout"><b>실제 입력과 자동화의 경계</b><p>RECENT 1–6은 최근 작업 순서이지 고정된 에이전트 여섯 개가 아닙니다. MODEL은 선택 메뉴, REVIEW는 리뷰 화면, TERMINAL은 패널을 엽니다. 자동 승인·코드 실행·모델 변경·작업 완료 감지는 하지 않습니다. 휠 누름 입력은 별도 스위치가 확인되지 않아 할당하지 않았습니다. 연결 상태 LED와 AI 작업 알림 LED도 별개이며 현재 물리 LED 자동 연동은 제공하지 않습니다.</p></aside>
+              <div className="warning"><b>활성 창과 입력 위치를 먼저 확인하세요</b><p>기기는 일반 키보드 입력을 보냅니다. 다른 앱을 선택하면 그 앱이 키를 받습니다. Ctrl+C는 터미널에서 명령 중단, Ctrl+V는 터미널 붙여넣기로 작동할 수 있습니다. 사이트의 「실행 전 확인」은 직접 키 입력을 막지 못합니다. 최근 작업의 순서는 사용하면서 바뀔 수 있고 음성 기능은 해당 앱 버전과 권한에 따라 달라집니다.</p></div>
+              <h3>유사 사례에서 도입한 것과 제외한 것</h3><p><a href="https://github.com/dazer1234/codex-stream-deck" target="_blank" rel="noreferrer">codex-stream-deck</a>는 Stream Deck와 Codex Micro 연결을 다루는 비공식 프로젝트입니다. 작업 슬롯·상태 표시라는 사용 방식은 참고할 수 있지만, NOVA KINE을 꽂는 것만으로 호환되지 않으며 내부 연결 방식은 앱 업데이트에 따라 바뀔 수 있습니다. 이번 구현은 공식 단축키와 VIA 프로토콜을 사용하고 앱 패치·내부 통신 가로채기는 도입하지 않았습니다.</p>
+              <p>공식 근거: <a href={CODEX_COMMANDS_URL} target="_blank" rel="noreferrer">데스크톱 Windows 단축키</a> · <a href="https://learn.chatgpt.com/docs/features/codex-micro" target="_blank" rel="noreferrer">Codex Micro</a> · <a href="https://github.com/qmk/qmk_firmware/blob/master/quantum/via.c" target="_blank" rel="noreferrer">QMK VIA 엔코더 프로토콜</a>. 확인: 2026-09-12. Windows 앱·실물 장치에서의 전체 동작 검증은 사용 환경에서 추가 확인이 필요합니다.</p>
+            </div>
+          </section>
+
           <section id="via" className="guide-section">
             <div className="section-number">06</div><div className="section-copy"><p className="guide-eyebrow">VIA CONFIGURATION</p><h2>VIA 키맵 설정</h2><div className="via-flow"><span>JSON 다운로드</span><i>→</i><span>Design에서 로드</span><i>→</i><span>Test Matrix</span><i>→</i><span>Configure</span></div>
               <div className="via-profile-panel"><div className="via-profile-head"><div><p>DEVICE DEFINITION</p><h3>{LK_KINE_PROFILE.name}</h3></div><div><span>VID <b>{LK_KINE_PROFILE.vendorIdHex}</b></span><span>PID <b>{LK_KINE_PROFILE.productIdHex}</b></span><span>MATRIX <b>{LK_KINE_PROFILE.matrix.rows}×{LK_KINE_PROFILE.matrix.cols}</b></span><span>ENCODER <b>{LK_KINE_PROFILE.encoder}</b></span></div></div><div className="via-keycodes">{LK_KINE_PROFILE.customKeycodes.slice(0,8).map(([code,label,copy])=><span key={code}><code>{code}</code><b>{label}</b><small>{copy}</small></span>)}</div></div>
@@ -134,7 +150,7 @@ export default function GuidePage() {
             <div className="section-number">09</div><div className="section-copy"><p className="guide-eyebrow">IN THE BOX</p><h2>기본 구성품</h2><div className="package-grid">{[['NOVA KINE','1'],['데이터 케이블','1'],['교체 플레이트','3'],['2.4G 수신기','1'],['1U 여분 키캡','6'],['여분 스위치','3'],['T6 드라이버','1'],['여분 나사 세트','1'],['키캡·스위치 풀러','1'],['빠른 시작 안내서','1']].map(([name,count])=><span key={name}><b>{name}</b><em>× {count}</em></span>)}</div></div>
           </section>
 
-          <footer className="guide-footer"><div><strong>AI PAD</strong><p>본 페이지는 LUMINKEY NOVA KINE 공식 사용자 설명서를 바탕으로 재구성한 한국어 요약 가이드입니다.</p></div><a href={manualUrl} target="_blank" rel="noreferrer">원본 설명서 확인 ↗</a></footer>
+          <footer className="guide-footer"><div><strong>NOVA KINE</strong><p>본 페이지는 LUMINKEY NOVA KINE 공식 사용자 설명서를 바탕으로 재구성한 한국어 요약 가이드입니다.</p></div><a href={manualUrl} target="_blank" rel="noreferrer">원본 설명서 확인 ↗</a></footer>
         </article>
       </div>
     </main>

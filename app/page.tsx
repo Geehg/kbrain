@@ -6,7 +6,10 @@ import KineScene from './kine-scene';
 import { useKeySound } from './use-key-sound';
 import ActionEditor from './action-editor';
 import { ActionRunner, type ActionRunnerHandle } from './action-runner';
-import { actionIssue, assignmentIssue, deviceKeycode, sanitizeActionSettings, type ActionType, type ActionSettings } from './deck-actions';
+import { actionIssue, assignmentIssue, deviceKeycode, parseShortcut, sanitizeActionSettings, type ActionType, type ActionSettings } from './deck-actions';
+import { CODEX_COMMANDS_URL, createCodexKeys, normalizeWheelMode, WHEEL_MODES, type WheelMode } from './codex-preset';
+import { applyDevicePreset } from './apply-device-preset';
+import { ProductBrand, ProductLink } from './product-brand';
 import {
   isLkKine,
   LK_KINE_AUXILIARY,
@@ -39,12 +42,12 @@ type KeyConfig = {
   tone?: 'dark' | 'lime';
   settings?: ActionSettings;
 };
-type Layer = { id: string; name: string; short: string; keys: KeyConfig[] };
+type Layer = { id: string; name: string; short: string; keys: KeyConfig[]; wheel?: WheelMode };
 type Macro = { id: string; name: string; steps: string[] };
 type ConnectionMode = 'usb' | '2.4g' | 'bluetooth';
 type HardwareConfig = { plate: PlateId; mirrored: boolean; rotation: Rotation; connectionMode: ConnectionMode };
 type ViaProfileRef = { name:string; vendorId:string; productId:string; matrix:{rows:number;cols:number}; auxiliaryKeys:string[]; encoder:string };
-type DeckConfig = { version: 1; profile: string; layers: Layer[]; macros: Macro[]; hardware?: HardwareConfig; via?:ViaProfileRef; updatedAt: string };
+type DeckConfig = { version: 1; profile: string; activeLayerId?: string; layers: Layer[]; macros: Macro[]; hardware?: HardwareConfig; via?:ViaProfileRef; updatedAt: string };
 
 const defaultHardware: HardwareConfig = { plate: 'A', mirrored: false, rotation: 90, connectionMode: 'usb' };
 const viaProfile:ViaProfileRef = { name:LK_KINE_PROFILE.name, vendorId:LK_KINE_PROFILE.vendorIdHex, productId:LK_KINE_PROFILE.productIdHex, matrix:{...LK_KINE_PROFILE.matrix}, auxiliaryKeys:[...LK_KINE_PROFILE.auxiliaryKeys], encoder:LK_KINE_PROFILE.encoder };
@@ -89,6 +92,7 @@ const createDefaultConfig = (): DeckConfig => ({
       key('ai-23','CONTEXT','ai','Summarize context'), key('ai-24','SUMMARY','ai','Create handoff summary'),
       ...protectedBluetoothKeys('ai'),
     ]},
+    { id: 'codex', name: 'GPT CODEX', short: 'GPT', wheel: 'chats', keys: [...createCodexKeys(), ...protectedBluetoothKeys('codex')] },
     { id: 'dev', name: 'DEVELOP', short: 'DEV', keys: [
       key('dev-01','CODEX','application','Open Codex'), key('dev-02','CLAUDE','application','Open Claude Code'), key('dev-03','GITHUB','application','Open GitHub'), key('dev-04','TERM','application','Open Terminal'),
       key('dev-05','DEV','macro','Start dev server'), key('dev-06','BUILD','macro','Production build'), key('dev-07','TEST','macro','Run test suite'), key('dev-08','DEPLOY','macro','Deploy site','', 'dark'),
@@ -139,7 +143,7 @@ const normalizeConfig = (candidate: DeckConfig): DeckConfig => {
     layers: defaults.layers.map((defaultLayer) => {
       const saved = candidate.layers.find((layer) => layer.id === defaultLayer.id);
       if (!saved) return defaultLayer;
-      return enforceProtectedBluetoothKeys({ ...defaultLayer, keys: defaultLayer.keys.map((fallback, index) => {
+      return enforceProtectedBluetoothKeys({ ...defaultLayer, wheel: normalizeWheelMode(saved.wheel, defaultLayer.wheel ?? 'keep'), keys: defaultLayer.keys.map((fallback, index) => {
         const item=saved.keys?.[index];
         if(!item||typeof item!=='object') return fallback;
         return {...fallback,id:fallback.id,
@@ -160,6 +164,7 @@ const normalizeConfig = (candidate: DeckConfig): DeckConfig => {
 
 const profilePresets = [
   { name: 'Content Studio', layerId: 'ai', description: 'AI 제작·검토 워크플로' },
+  { name: 'GPT Codex', layerId: 'codex', description: 'Windows 공식 단축키 · 최근 작업 6개 · 휠' },
   { name: 'Development Hub', layerId: 'dev', description: 'Codex·Claude·Git 작업' },
   { name: 'Design Lab', layerId: 'design', description: 'Figma·Adobe·에셋 작업' },
 ] as const;
@@ -226,7 +231,7 @@ export default function Home() {
       if (!saved) return;
       try {
         const next = normalizeConfig(JSON.parse(saved) as DeckConfig);
-        const presetLayerId = profilePresets.find((preset) => preset.name === next.profile)?.layerId ?? next.layers[0]?.id;
+        const presetLayerId = next.activeLayerId ?? profilePresets.find((preset) => preset.name === next.profile)?.layerId ?? next.layers[0]?.id;
         const restoredLayer = next.layers.find((layer) => layer.id === presetLayerId) ?? next.layers[0];
         const first = restoredLayer?.keys[0];
         setConfig(next);
@@ -316,6 +321,18 @@ export default function Home() {
   const switchLayer = (id: string) => {
     const next = config.layers.find(layer => layer.id === id) ?? config.layers[0];
     setActiveLayerId(next.id); setSelectedKeyId(next.keys[0].id); setDraft(next.keys[0]);
+    setConfig(current => {
+      const updated = { ...current, activeLayerId: next.id };
+      localStorage.setItem('kbrain-command-deck-v1', JSON.stringify(updated));
+      return updated;
+    });
+  };
+  const updateWheel = (wheel: WheelMode) => {
+    setConfig(current => {
+      const next = { ...current, layers: current.layers.map(layer => layer.id === activeLayerId ? { ...layer, wheel } : layer), updatedAt: new Date().toISOString() };
+      localStorage.setItem('kbrain-command-deck-v1', JSON.stringify(next));
+      return next;
+    });
   };
   const selectKey = (item: KeyConfig) => { setSelectedKeyId(item.id); setDraft(item); };
   const clickKey = (item: KeyConfig) => { keySound.play(); selectKey(item); if(window.innerWidth<=1050) document.getElementById('key-inspector')?.scrollIntoView({block:'start',behavior:'smooth'}); };
@@ -328,11 +345,11 @@ export default function Home() {
   const resetLayer = () => {
     const original = createDefaultConfig().layers.find(layer => layer.id === activeLayerId)!;
     const next = { ...config, layers:config.layers.map(layer => layer.id === activeLayerId ? original : layer) };
-    setConfig(next); setSelectedKeyId(original.keys[0].id); setDraft(original.keys[0]); flash('현재 레이어를 기본값으로 복원했습니다');
+    setConfig(next); localStorage.setItem('kbrain-command-deck-v1', JSON.stringify(next)); setSelectedKeyId(original.keys[0].id); setDraft(original.keys[0]); flash('현재 레이어를 기본값으로 복원했습니다');
   };
   const exportConfig = () => {
     const blob = new Blob([JSON.stringify({ ...config, via:viaProfile, updatedAt:new Date().toISOString() }, null, 2)], { type:'application/json' });
-    const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href=url; anchor.download='kbrain-ai-command-deck.json'; anchor.click(); URL.revokeObjectURL(url); flash('JSON 설정을 내보냈습니다');
+    const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href=url; anchor.download='nova-kine-config.json'; anchor.click(); URL.revokeObjectURL(url); flash('JSON 설정을 내보냈습니다');
   };
   const importConfig = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]; if (!file) return;
@@ -429,33 +446,21 @@ export default function Home() {
       ...Array.from({length:layerCount}, (_, layer) => LK_KINE_BLUETOOTH_AUX.map((control) => ({ layer, ...control }))).flat(),
     ];
     const assignments = [...presetAssignments, ...protectedAssignments];
-    if (!window.confirm(`${config.profile} · ${activeLayer.name}: 설정 완료 ${presetAssignments.length}개를 Layer 0에 기록합니다.\n미설정 ${skipped.length}개는 기존 키코드를 유지합니다${skipped.length?': '+skipped.map(({key})=>key.label).join(', '):''}.\n\n단축키 외의 액션은 사이트 실행 모드 또는 Windows 실행 파일이 있어야 작동합니다. 기록 성공은 프로그램 실행 성공이 아닙니다.\n\nHOME/FN, Fn 조합과 BT1/BT2/BT3는 보호합니다. 계속할까요?`)) return;
+    const wheel = WHEEL_MODES[normalizeWheelMode(activeLayer.wheel)];
+    const encoder = wheel.cw ? [
+      { layer: targetLayer, clockwise: false, keycode: parseShortcut(wheel.ccw)! },
+      { layer: targetLayer, clockwise: true, keycode: parseShortcut(wheel.cw)! },
+    ] : [];
+    if (!window.confirm(`${config.profile} · ${activeLayer.name}: 설정 완료 ${presetAssignments.length}개를 Layer 0에 기록합니다.\n미설정 ${skipped.length}개는 기존 키코드를 유지합니다${skipped.length?': '+skipped.map(({key})=>key.label).join(', '):''}.\n휠: ${wheel.label}${encoder.length ? ' · E0 양방향 백업 및 검증' : ''}\n\n단축키는 현재 활성 앱에 전달됩니다. 단축키 외의 액션은 사이트 실행 모드 또는 Windows 실행 파일이 있어야 작동합니다. 기록 성공은 프로그램 실행 성공이 아닙니다.\n\nHOME/FN, Fn 조합과 BT1/BT2/BT3는 보호합니다. 계속할까요?`)) return;
     setKeyTestEnabled(false);
     setApplyState({status:'applying',done:0,total:assignments.length,message:'현재 키맵을 백업하고 있습니다'});
-    const snapshot = new Map<string, number>();
-    const written: typeof assignments = [];
     try {
-      for (const assignment of assignments) {
-        snapshot.set(`${assignment.layer}:${assignment.address}`, await client.getKeycode(assignment.layer, assignment.address));
-      }
-      for (let index = 0; index < assignments.length; index += 1) {
-        const assignment = assignments[index];
-        const previous = snapshot.get(`${assignment.layer}:${assignment.address}`);
-        if (previous !== assignment.keycode) {
-          await client.setKeycode(assignment.layer, assignment.address, assignment.keycode);
-          written.push(assignment);
-        }
-        setApplyState({status:'applying',done:index+1,total:assignments.length,message:`L${assignment.layer} M[${assignment.address}] ${assignment.label} 검증 완료`});
-      }
-      setApplyState({status:'success',done:assignments.length,total:assignments.length,message:`키코드 ${presetAssignments.length}개 + 무선 보호 검증 완료 · 미설정 ${skipped.length}개 유지`});
-      flash('키코드 기록 완료 · 앱·웹 액션은 실행 모드 연결 필요');
+      await applyDevicePreset(client, assignments, encoder, (done, total, label) => setApplyState({status:'applying',done,total,message:`${label} 검증 완료`}));
+      const total = assignments.length + encoder.length;
+      setApplyState({status:'success',done:total,total,message:`키 ${presetAssignments.length}개 + 무선 보호 검증 완료 · ${encoder.length ? '휠 양방향 검증 완료' : '기기 휠 유지'} · 미설정 ${skipped.length}개 유지`});
+      flash(activeLayer.id === 'codex' ? '키코드 기록 완료 · Windows에서 Codex 창을 활성화하고 사용하세요' : '키코드 기록 완료 · 앱·웹 액션은 실행 모드 연결 필요');
     } catch (error) {
-      for (const assignment of written.reverse()) {
-        const previous = snapshot.get(`${assignment.layer}:${assignment.address}`);
-        if (previous === undefined) continue;
-        try { await client.setKeycode(assignment.layer, assignment.address, previous); } catch { /* best-effort rollback */ }
-      }
-      const message = error instanceof Error ? `${error.message} · 원래 키맵 복원을 시도했습니다` : '프리셋 적용 실패 · 원래 키맵 복원을 시도했습니다';
+      const message = error instanceof Error ? error.message : '프리셋 적용 실패';
       setApplyState({status:'error',done:0,total:assignments.length,message});
       flash(message);
     } finally {
@@ -473,8 +478,9 @@ export default function Home() {
       {toast && <div className="toast" role="status">✓ {toast}</div>}
       <input ref={importRef} type="file" accept="application/json" hidden onChange={importConfig} />
       <header className="topbar">
-        <div className="brand-lockup"><strong>AI PAD</strong></div>
+        <ProductBrand />
         <nav className="top-actions" aria-label="프로젝트 작업">
+            <ProductLink />
             <a className="guide-link" href="/guide">사용 가이드</a>
           <button className={`connection-button ${deviceState==='connected'?'connected':''}`} onClick={() => setShowDevice(true)}><i /> {deviceInfo ? deviceInfo.name : '장치 연결'}</button>
           <button className="ghost-button" onClick={() => importRef.current?.click()}>불러오기</button>
@@ -493,16 +499,25 @@ export default function Home() {
               {profilePresets.map(preset => <button key={preset.name} className={config.profile === preset.name ? 'active' : ''} onClick={() => selectProfile(preset.name,preset.layerId)}><span><b>{preset.name}</b><small>{preset.description}</small></span><em>{config.profile === preset.name ? '✓' : '→'}</em></button>)}
             </div>}
           </div>
-          <p className="eyebrow layer-title">LAYERS</p>
+          <p className="eyebrow layer-title">PRESET LAYERS</p>
           {config.layers.map((layer,index) => <button className={`layer-button ${activeLayer.id === layer.id ? 'active' : ''}`} key={layer.id} onClick={() => switchLayer(layer.id)}><span>0{index+1}</span>{layer.name}</button>)}
-          <div className="rail-footer"><button onClick={() => flash('v0.1은 4개 핵심 레이어를 사용합니다')}>＋ 새 레이어</button><button onClick={() => flash('설정은 이 브라우저에 자동 저장됩니다')}>⚙ 환경설정</button></div>
+          <div className="rail-footer"><span>5개 프리셋 · 적용 대상: 기기 Layer 0</span><button onClick={() => flash('설정은 이 브라우저에 자동 저장됩니다')}>⚙ 환경설정</button></div>
         </aside>
 
         <section className="canvas-panel">
+          <label className="mobile-layer-picker">프리셋<select value={activeLayer.id} onChange={event => switchLayer(event.target.value)}>{config.layers.map(layer => <option key={layer.id} value={layer.id}>{layer.name}</option>)}</select></label>
           <div className="section-heading">
             <div><p className="eyebrow">KEYMAP / LAYER {String(config.layers.indexOf(activeLayer)+1).padStart(2,'0')}</p><h1>{activeLayer.name}</h1></div>
             <div className="history-actions"><button aria-label="이전 키" onClick={() => selectKey(activeLayer.keys[(selectedIndex+activeLayer.keys.length-1)%activeLayer.keys.length])}>←</button><button aria-label="다음 키" onClick={() => selectKey(activeLayer.keys[(selectedIndex+1)%activeLayer.keys.length])}>→</button><button onClick={resetLayer}>초기화</button></div>
           </div>
+
+          {activeLayer.id === 'codex' && <section className="codex-preset-panel" aria-label="GPT Codex 실사용 안내">
+            <div><p className="eyebrow">WINDOWS DESKTOP · DIRECT KEYS</p><h2>작업 여섯 개. 손끝으로 전환.</h2><p>최근 작업 1–6, 응답 대기 작업, 모델 메뉴와 개발 도구를 실제 단축키로 연결합니다. 기본 구성은 별도 실행 파일·API 키가 필요 없습니다.</p></div>
+            <div className="codex-chips"><span>RECENT 1–6</span><span>ATTENTION</span><span>MODEL</span><span>REVIEW / TERMINAL</span><span>BT SAFE ×3</span></div>
+            <details><summary>적용 순서와 가능한 범위 확인</summary><ol><li>USB-C 연결 → 이 프리셋의 키·휠 확인 → 「프리셋을 기기에 적용」.</li><li>Windows의 Codex 데스크톱 창을 활성화하고 NEW·COMMAND부터 테스트하세요. 단축키를 바꾼 경우 오른쪽 키 설정도 맞춰야 합니다.</li><li>BT1/2/3으로 Windows에 연결하면 저장한 키 입력을 무선으로 사용합니다. 사이트를 열어둘 필요가 없습니다.</li></ol><p>현재 앱의 Codex 모드용입니다. ChatGPT 웹·Codex CLI·다른 앱의 단축키와는 다릅니다. RECENT는 고정 에이전트가 아닌 최근 작업 순서이며, 휠은 현재 화면에 따라 작업 또는 탭을 전환합니다.</p><p>자동 승인·강제 중단·모델 자동 변경을 기본 키에 넣지 않았습니다. LED 작업 상태 자동 수신과 물리 LED 제어는 아직 연동되지 않았습니다. 버튼 클릭은 설정 선택이며 Codex를 원격 조작하지 않습니다.</p><p>이는 사이트의 추가 프리셋입니다. 적용하면 기기 Layer 0를 교체하며, 화면 프리셋 선택만으로 실제 장치가 전환되지는 않습니다. Home/Fn과 무선용 Layer 2는 보존합니다.</p><a href={CODEX_COMMANDS_URL} target="_blank" rel="noreferrer">공식 Windows 단축키 ↗</a> · <a href="/guide#codex">Codex 활용 가이드 →</a></details>
+          </section>}
+
+          <div className="wheel-settings"><label htmlFor="wheel-mode">E0 휠 동작</label><select id="wheel-mode" value={normalizeWheelMode(activeLayer.wheel)} disabled={applyState.status==='applying'} onChange={event => updateWheel(normalizeWheelMode(event.target.value))}>{Object.entries(WHEEL_MODES).map(([id, mode]) => <option key={id} value={id}>{mode.label}</option>)}</select><small>{WHEEL_MODES[normalizeWheelMode(activeLayer.wheel)].cw ? `반시계: ${WHEEL_MODES[normalizeWheelMode(activeLayer.wheel)].ccw} / 시계: ${WHEEL_MODES[normalizeWheelMode(activeLayer.wheel)].cw} · USB 적용 시 지원 확인·읽기 검증` : '휠에는 기록하지 않습니다. 다른 프리셋에서 저장한 휠 동작도 그대로 유지됩니다.'}</small></div>
 
           <div className="hardware-toolbar" aria-label="물리 배열 설정">
             <div className="hardware-options-scroll" aria-label="배열 및 키 테스트 옵션">
@@ -543,6 +558,7 @@ export default function Home() {
           <p className="eyebrow">SELECTED KEY</p>
           <div className="selected-summary"><span>{draft.glyph}</span><div><strong>{draft.label}</strong><small>{protectedSelected?'WIRELESS SAFE · 변경 잠금':`Key ${String(selectedIndex+1).padStart(2,'0')} · Layer ${String(config.layers.indexOf(activeLayer)+1).padStart(2,'0')}`}</small></div></div>
           {protectedSelected ? <div className="protected-key-note"><b>무선 연결 보호 키</b><p>{draft.action==='LT(2,KC_HOME)'?'짧게 누르면 Home, 길게 누르면 제조사 Layer 2가 열립니다. 이 키를 보존해야 기존 Home + 1/2/3 페어링 조합을 계속 사용할 수 있습니다.':`${draft.label}는 LK-KINE 펌웨어의 ${draft.action} 키코드를 직접 실행합니다. 짧게 눌러 채널을 전환하고 3-5초 길게 눌러 해당 슬롯을 페어링하세요.`}</p><span>모든 프리셋과 장치 레이어에 자동 적용됩니다.</span></div> : <>
+            {activeLayer.id === 'codex' && <div className="codex-key-note"><b>Windows · 활성 창에 키 입력</b><p>{draft.kind === 'keyboard' ? `${draft.settings?.shortcut ?? draft.action} — ${draft.prompt}` : '기본 단축키가 아닌 사용자 지정 액션입니다. 실행 모드의 연결 조건을 확인하세요.'}</p><small>직접 키 입력에는 사이트의 실행 전 확인·HUD 옵션이 개입하지 않습니다. 다른 앱에 포커스가 있으면 그 앱이 입력을 받습니다.</small></div>}
             <div className="field-pair"><div><label htmlFor="label">키 라벨</label><input id="label" value={draft.label} onChange={e => setDraft({...draft,label:e.target.value.toUpperCase().slice(0,10)})} /></div><div><label htmlFor="glyph">아이콘</label><input id="glyph" value={draft.glyph} onChange={e => setDraft({...draft,glyph:e.target.value.slice(0,3)})} /></div></div>
             <label>액션 유형</label>
             <div className="type-grid">{(Object.keys(typeLabels) as ActionType[]).map(kind => <button key={kind} className={draft.kind===kind?'active':''} onClick={() => setDraft({...draft,kind,action:actionOptions[kind][0],settings:{}})}>{typeLabels[kind]}</button>)}</div>
