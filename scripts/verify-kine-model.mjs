@@ -43,13 +43,28 @@ for (const [width, depth] of [[14.3, 14.3], [33.6, 14.3], [14.3, 33.6]]) {
   }
   geometry.dispose(); mesh.material.dispose();
 }
-const { DEFAULT_LED_SETTINGS, LED_SCENARIOS, resolveKineLeds, ledLevel } = await import(await sourceModule('kine-led'));
+const { DEFAULT_LED_SETTINGS, LED_SCENARIOS, resolveKineLeds, ledLevel, ledColor, LED_ALERTS } = await import(await sourceModule('kine-led'));
 const automatic = connected => resolveKineLeds(DEFAULT_LED_SETTINGS, connected);
 assert.deepEqual(automatic(false).signals.map(s => s.pattern), ['off', 'off']);
-assert.equal(automatic(true).signals[1].color, '#ff3020');
-assert.equal(automatic(true).signals[0].pattern, 'off', 'USB cannot establish Num Lock state');
+assert.equal(automatic(true).signals[1].pattern, 'spectrum');
+assert.equal(automatic(true).signals[0].color, '#eff8ff', 'White video reference, not inferred Num Lock');
+assert.match(automatic(true).note, /実際|실제/);
 assert.equal(automatic(false).signals[1].pattern, 'off', 'Disconnect clears expected USB lighting');
-assert.equal(resolveKineLeds({ ...DEFAULT_LED_SETTINGS, numLock: true }, true).signals[0].pattern, 'off', 'Preview Num Lock cannot contaminate automatic mode');
+assert.deepEqual(resolveKineLeds({ ...DEFAULT_LED_SETTINGS, numLock: true }, true).signals, automatic(true).signals, 'Num Lock example cannot change video reference');
+const spectrum = automatic(true).signals[1];
+assert.notEqual(ledColor(spectrum, 0, false), ledColor(spectrum, 525, false));
+assert.equal(ledColor(spectrum, 0, false), ledColor(spectrum, 2100, false));
+assert.equal(ledColor(spectrum, 800, true), spectrum.color);
+assert.deepEqual(resolveKineLeds({ ...DEFAULT_LED_SETTINGS, scenario:'usb-video' }, false).signals, automatic(true).signals);
+for (const alert of LED_ALERTS) {
+  const state = resolveKineLeds({ ...DEFAULT_LED_SETTINGS, scenario:alert.scenario }, false);
+  assert.deepEqual(state.signals[1], {color:alert.color,pattern:alert.pattern});
+  assert.match(state.note, /화면에서만/);
+}
+const complete = resolveKineLeds({ ...DEFAULT_LED_SETTINGS, scenario:'complete' }, false).signals[1];
+assert.equal(ledLevel(complete, 0, false), 0);
+assert.equal(ledLevel(complete, 1200, false), 1);
+assert.equal(ledLevel(complete, 2400, false), 0);
 for (const [scenario] of LED_SCENARIOS) {
   const settings = { ...DEFAULT_LED_SETTINGS, scenario };
   const state = resolveKineLeds(settings, false);
@@ -148,4 +163,4 @@ for (const plate of ['A', 'B', 'C', 'D']) for (const mirrored of [false, true]) 
   }
   disposeModel(model.root);
 }
-console.log(`PASS: ${configurations} plate/mirror/rotation combinations; cable attachment/clearance/framing; key matrix identity, bounds, non-overlap, selection/occlusion, recessed LED/roller/pocket geometry; all 10 LED scenarios, USB connect/disconnect, battery colors/counts, blink phases and reduced motion.`);
+console.log(`PASS: ${configurations} plate/mirror/rotation combinations; cable attachment/clearance/framing; key matrix identity, bounds, non-overlap, selection/occlusion, recessed LED/roller/pocket geometry; all ${LED_SCENARIOS.length} LED scenarios, video spectrum/white reference, notification patterns, USB connect/disconnect, battery colors/counts, blink phases and reduced motion.`);

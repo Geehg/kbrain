@@ -2,13 +2,15 @@ import { qmkKeycodeForAction } from './via-webhid';
 
 export type ActionType = 'keyboard' | 'website' | 'application' | 'ai' | 'agent' | 'macro' | 'system';
 export type ActionStep = { kind: 'url' | 'text' | 'wait'; value: string };
-export type ActionSettings = { shortcut?: string; url?: string; appPath?: string; text?: string; steps?: ActionStep[] };
+export type ActionSettings = { shortcut?: string; url?: string; appPath?: string; appExecutable?: string; appSearch?: 'auto'|'manual'; appDrives?: string; appDeepSearch?: boolean; text?: string; steps?: ActionStep[] };
 export type DeckAction = { id: string; label: string; kind: ActionType; action: string; prompt: string; confirm: boolean; hud: boolean; settings?: ActionSettings };
 
 export function sanitizeActionSettings(value: unknown): ActionSettings {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const raw=value as Record<string,unknown>, result:ActionSettings={};
-  for(const field of ['shortcut','url','appPath','text'] as const) if(typeof raw[field]==='string') result[field]=raw[field];
+  for(const field of ['shortcut','url','appPath','appExecutable','appDrives','text'] as const) if(typeof raw[field]==='string') result[field]=raw[field];
+  if(raw.appSearch==='auto'||raw.appSearch==='manual') result.appSearch=raw.appSearch;
+  if(typeof raw.appDeepSearch==='boolean') result.appDeepSearch=raw.appDeepSearch;
   if(Array.isArray(raw.steps)&&raw.steps.length<=16&&raw.steps.every(step=>step&&typeof step==='object'&&['url','text','wait'].includes(step.kind)&&typeof step.value==='string')) result.steps=raw.steps.map(step=>({kind:step.kind,value:step.value}));
   return result;
 }
@@ -55,6 +57,25 @@ export function validAppPath(value: string) {
   const path = cleanAppPath(value);
   return path.length <= 1024 && /^[a-z]:\\[^:"<>|?*\u0000-\u001f]+\.exe$/i.test(path);
 }
+export const APPLICATION_EXECUTABLES: Record<string,string[]> = {
+  'Open Codex':['Codex.exe'], 'Open Claude Code':['claude.exe'], 'Open Claude':['Claude.exe'], 'Open ChatGPT':['ChatGPT.exe'],
+  'Open Figma':['Figma.exe'], 'Open Photoshop':['Photoshop.exe'], 'Open Adobe CC':['Creative Cloud.exe'],
+  'Open Illustrator':['Illustrator.exe'], 'Open Premiere':['Adobe Premiere Pro.exe'], 'Open GitHub':['GitHubDesktop.exe'],
+  'Open Terminal':['WindowsTerminal.exe','wt.exe'], 'Open Docker':['Docker Desktop.exe'], 'Open Finder':['explorer.exe'],
+  'Open Browser':['msedge.exe','chrome.exe','firefox.exe','brave.exe'], 'Open Music':['Spotify.exe','iTunes.exe'],
+  'Open Calendar':['olk.exe','HxCalendarAppImm.exe'], 'Open Mail':['olk.exe','HxOutlook.exe'], 'Open Notes':['ONENOTE.EXE','Notepad.exe'],
+};
+export const validExecutableName = (value:string) => typeof value==='string' && /^[A-Za-z0-9][A-Za-z0-9 ._()+\-]{0,127}\.exe$/i.test(value.trim());
+export function applicationExecutables(key:DeckAction) {
+  const custom=key.settings?.appExecutable?.trim();
+  return custom ? (validExecutableName(custom) ? [custom] : []) : (APPLICATION_EXECUTABLES[key.action] ?? []);
+}
+export const applicationSearchMode = (key:DeckAction) => key.settings?.appSearch ?? (key.settings?.appPath?.trim() ? 'manual' : applicationExecutables(key).length ? 'auto' : 'manual');
+export function normalizedDriveLetters(value:string|undefined) {
+  if(typeof value!=='string') return 'C';
+  const letters=[...new Set(value.toUpperCase().split(/[\s,]+/).filter(Boolean))];
+  return letters.length>0&&letters.length<=6&&letters.every(letter=>/^[A-Z]$/.test(letter))?letters.join(','):null;
+}
 export function actionSteps(key: DeckAction): ActionStep[] {
   const s = key.settings ?? {};
   if (key.kind === 'website' || (key.kind === 'system' && key.action === 'Open website')) return [{ kind:'url', value:s.url ?? '' }];
@@ -66,7 +87,13 @@ export function actionSteps(key: DeckAction): ActionStep[] {
 export function actionIssue(key: DeckAction): string | null {
   const shortcut = shortcutFor(key);
   if (shortcut) return parseShortcut(shortcut) === null ? '지원되는 단축키를 지정하세요. 예: Ctrl+Shift+S' : null;
-  if (key.kind === 'application') return validAppPath(key.settings?.appPath ?? '') ? null : 'Windows 프로그램의 전체 .exe 경로를 지정하세요.';
+  if (key.kind === 'application') {
+    if(applicationSearchMode(key)==='manual') return validAppPath(key.settings?.appPath ?? '') ? null : 'Windows 프로그램의 전체 .exe 경로를 지정하세요.';
+    if(key.settings?.appExecutable?.trim()&&!validExecutableName(key.settings.appExecutable)) return '실행 파일 이름을 Photoshop.exe처럼 입력하세요.';
+    if(!applicationExecutables(key).length) return '찾을 실행 파일 이름(.exe)을 선택하거나 입력하세요.';
+    if(key.settings?.appDeepSearch&&normalizedDriveLetters(key.settings?.appDrives)===null) return '검색할 드라이브는 C,D처럼 영문 드라이브 문자 1~6개로 입력하세요.';
+    return null;
+  }
   const steps = actionSteps(key);
   if (!Array.isArray(steps) || !steps.length || steps.length > 16) return '실행할 세부 동작을 설정하세요. 매크로는 1~16단계입니다.';
   for (const step of steps) {
@@ -106,7 +133,13 @@ export function windowsScript(assignments: { key: DeckAction; index: number; mat
   const supported = assignments.filter(({ key }) => !actionIssue(key) && !shortcutFor(key));
   if (!supported.length) throw new Error('먼저 웹주소, 프로그램 경로, 지시문 또는 매크로를 저장하세요. 기본 단축키는 별도 파일 없이 작동합니다.');
   const blocks = supported.map(({key,index,matrix}) => {
-    const statements = key.kind === 'application' ? [
+    const auto=key.kind==='application'&&applicationSearchMode(key)==='auto';
+    const statements = key.kind === 'application' ? auto ? [
+      `appPath := AI_PAD_FindApp([${applicationExecutables(key).map(ahkString).join(', ')}], ${ahkString(key.settings?.appDeepSearch?(normalizedDriveLetters(key.settings?.appDrives)??''):'')})`,
+      `if !appPath`,
+      `    throw Error("프로그램을 찾지 못했습니다. 검색 드라이브 또는 직접 경로를 확인하세요.")`,
+      `Run(Chr(34) appPath Chr(34))`,
+    ] : [
       `if !FileExist(${ahkString(cleanAppPath(key.settings!.appPath!))})`,
       `    throw Error("프로그램 경로를 찾지 못했습니다. 사이트에서 경로를 확인하세요.")`,
       `Run(${ahkString('"' + cleanAppPath(key.settings!.appPath!) + '"')})`,
@@ -127,6 +160,53 @@ ${key.hud ? '        TrayTip("실행 요청 전달 완료 · 앱/AI 작업의 �
     }
 }`;
   });
+  const finder=supported.some(({key})=>key.kind==='application'&&applicationSearchMode(key)==='auto')?`
+global AI_PAD_APP_CACHE := Map()
+AI_PAD_FindApp(names, drives := "") {
+    global AI_PAD_APP_CACHE
+    cacheKey := ""
+    for name in names
+        cacheKey .= "|" name
+    cacheKey .= "@" drives
+    if AI_PAD_APP_CACHE.Has(cacheKey) && FileExist(AI_PAD_APP_CACHE[cacheKey])
+        return AI_PAD_APP_CACHE[cacheKey]
+    for name in names {
+        for root in ["HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\", "HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\", "HKEY_LOCAL_MACHINE\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\App Paths\\"] {
+            try {
+                found := Trim(RegRead(root name), Chr(34))
+                if FileExist(found) {
+                    AI_PAD_APP_CACHE[cacheKey] := found
+                    return found
+                }
+            } catch {
+            }
+        }
+    }
+    roots := [A_ProgramFiles, EnvGet("ProgramFiles(x86)"), A_LocalAppData]
+    for root in roots {
+        if !root || !DirExist(root)
+            continue
+        for name in names {
+            Loop Files, root "\\" name, "R" {
+                AI_PAD_APP_CACHE[cacheKey] := A_LoopFileFullPath
+                return A_LoopFileFullPath
+            }
+        }
+    }
+    for drive in StrSplit(drives, ",") {
+        drive := Trim(drive)
+        if !RegExMatch(drive, "^[A-Z]$") || !DirExist(drive ":\\")
+            continue
+        for name in names {
+            Loop Files, drive ":\\" name, "R" {
+                AI_PAD_APP_CACHE[cacheKey] := A_LoopFileFullPath
+                return A_LoopFileFullPath
+            }
+        }
+    }
+    return ""
+}
+`:'';
   return { count:supported.length, source:`; AI PAD · AutoHotkey v2 · 사용자가 저장한 설정만 포함합니다.
 ; 먼저 메모장으로 내용을 확인한 뒤 실행하세요. 관리자 권한/자동 시작 설정 없음.
 ; 사이트 실행 모드는 OFF로 두세요. 동시에 프로필 파일 하나만 실행하세요.
@@ -134,6 +214,7 @@ ${key.hud ? '        TrayTip("실행 요청 전달 완료 · 앱/AI 작업의 �
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 global AI_PAD_BUSY := false
+${finder}
 ${blocks.join('\n\n')}
 ` };
 }

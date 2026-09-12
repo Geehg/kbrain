@@ -52,6 +52,19 @@
 .kine-led-explanation { margin:10px 0 0; font-size:12px; line-height:1.7; color:#697663; }.kine-led-slots { display:flex; gap:6px; margin-top:10px; }.kine-led-slots button { border:1px solid #cad4c5; background:#fafdf7; color:#687e5b; border-radius:6px; padding:6px 14px; font-size:12px; }.kine-led-slots button[aria-pressed=true] { background:#33442d; color:#d9edbe; border-color:#33442d; }
 .kine-led-tuning { margin-top:14px; padding-top:12px; border-top:1px solid #d4ddcd; }.kine-led-tuning summary { cursor:pointer; font-size:12px; color:#506246; }.kine-led-tuning summary span { float:right; color:#8a9781; font-size:10px; }.kine-led-tuning>div { display:grid; gap:14px; padding-top:16px; }.kine-led-tuning label { display:flex; align-items:center; gap:10px; font-size:12px; color:#5b6b51; }.kine-led-color input { width:38px; height:28px; padding:2px; background:#fff; border:1px solid #ccd5c5; border-radius:5px; }.kine-led-color code { font-size:11px; color:#8b9882; }.kine-led-brightness input { flex:1; min-width:50px; accent-color:#81994c; }.kine-led-brightness span { width:35px; text-align:right; font:11px var(--font-geist-mono),monospace; }.kine-led-checks { display:flex; gap:15px; flex-wrap:wrap; }.kine-led-checks input { accent-color:#687e4c; }.kine-led-tuning small { color:#8a9583; font-size:11px; line-height:1.7; }
 @keyframes kine-led-flash { 0%,48%,100% { opacity:.24; filter:saturate(.2); box-shadow:none; } 8%,36% { opacity:1; filter:none; box-shadow:0 0 9px var(--led-color); } }
+.kine-led-samples i.breathe { animation:kine-led-breathe 2.4s ease-in-out infinite; }
+.kine-led-samples i.spectrum { animation:kine-led-spectrum 2.1s linear infinite; }
+.kine-led-samples[data-paused=true] i { animation:none; }
+@keyframes kine-led-breathe { 0%,100% { opacity:.15; box-shadow:none; } 50% { opacity:1; box-shadow:0 0 12px var(--led-color); } }
+@keyframes kine-led-spectrum { from { filter:hue-rotate(0deg); } to { filter:hue-rotate(-360deg); } }
+.kine-led-alerts { min-width:0; margin:18px 0 0; padding:12px; border:1px solid #cdd5c8; border-radius:9px; }
+.kine-led-alerts legend { padding:0 6px; font-size:14px; color:#344031; }
+.kine-led-alerts>div { display:flex; flex-wrap:wrap; gap:8px; }
+.kine-led-alerts button { display:flex; align-items:center; gap:7px; border:1px solid #cad4c5; border-radius:6px; padding:9px 11px; background:#fff; font-size:14px; color:#344031; }
+.kine-led-alerts button[aria-pressed=true] { background:#253023; color:#fff; border-color:#253023; }
+.kine-led-alerts button i { width:9px; height:9px; border-radius:50%; }
+.kine-led-alerts p { margin:12px 0 0; color:#596551; font-size:14px; line-height:1.6; }
+.kine-led-alerts a { text-decoration:underline; text-underline-offset:3px; }
 @media(max-width:1100px) { .kine-reset span { display:none; }.kine-viewbar { gap:0; padding:8px; }.kine-viewbar button { padding:7px; font-size:12px; }.kine-options { gap:10px; } }
 @media(max-width:760px) { .kine-canvas { height:430px; }.kine-stage-heading { left:16px; top:16px; }.kine-stage-caption { left:16px; right:16px; bottom:14px; font-size:12px; }.kine-stage-caption span { max-width:230px; }.kine-options { gap:12px; padding:10px 12px; font-size:14px; }.kine-view-presets { gap:0; }.kine-viewbar button { padding:8px 6px; }.kine-viewer { border-radius:12px; } }
 @media(prefers-reduced-motion:reduce) { .kine-viewer * { scroll-behavior:auto; } }

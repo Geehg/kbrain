@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MatrixAddress, PlateId, Rotation } from './lk-kine-profile';
 import type { Finish, ModelKey, ModelPart } from './kine-model';
 import KineLedControls from './kine-led-controls';
-import { DEFAULT_LED_SETTINGS, ledLevel, resolveKineLeds, type LedSettings } from './kine-led';
+import { DEFAULT_LED_SETTINGS, ledColor, ledLevel, resolveKineLeds, type LedSettings } from './kine-led';
 import './kine-scene.css';
 
 type View = 'perspective' | 'top' | 'bottom' | 'left' | 'right' | 'ports' | 'leds';
@@ -216,13 +216,14 @@ export default function KineScene(props: Props) {
         const freezeLeds = reduced.matches || currentLedSettings.paused;
         for (let i = 0; i < 2; i++) {
           const signal = currentLeds.signals[i], level = ledLevel(signal, now - ledEpoch, freezeLeds);
-          const strength = level * currentLedSettings.brightness / 100;
+          const color = ledColor(signal, now - ledEpoch, freezeLeds);
+          const strength = level * Math.max(0, Math.min(100, currentLedSettings.brightness)) / 100;
           const material = model.ledMaterials[i];
-          material.color.set(i ? '#c5cac7' : '#51585a').lerp(new THREE.Color(signal.color), strength * .45);
-          material.emissive.set(signal.color); material.emissiveIntensity = strength * 4.2;
-          model.ledLights[i].color.set(signal.color); model.ledLights[i].intensity = currentLedSettings.spill ? strength * 32 : 0;
-          model.ledHalos[i].material.color.set(signal.color); model.ledHalos[i].material.opacity = currentLedSettings.spill ? strength * .7 : 0;
-          if (!freezeLeds && (signal.pattern === 'pairing' || signal.pattern === 'warning')) animating = true;
+          material.color.set(i ? '#c5cac7' : '#51585a').lerp(new THREE.Color(color), strength * .45);
+          material.emissive.set(color); material.emissiveIntensity = strength * 4.2;
+          model.ledLights[i].color.set(color); model.ledLights[i].intensity = currentLedSettings.spill ? strength * 32 : 0;
+          model.ledHalos[i].material.color.set(color); model.ledHalos[i].material.opacity = currentLedSettings.spill ? strength * .7 : 0;
+          if (!freezeLeds && signal.pattern !== 'off' && signal.pattern !== 'steady') animating = true;
         }
         for (const key of model.keyMeshes) {
           const pressed = p.pressed.has(key.matrix) || (virtualPress === key.id && now < pressUntil);

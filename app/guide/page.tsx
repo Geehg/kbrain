@@ -17,7 +17,7 @@ const manualUrl = 'https://cdn.shopify.com/s/files/1/0815/1800/2452/files/Nova_K
 
 const contents = [
   ['device','장치 도면'], ['start','빠른 시작'], ['connect','연결 방법'], ['keys','조합키'],
-  ['actions','앱·웹·AI 실행'], ['via','VIA 설정'], ['layout','플레이트 배열'], ['firmware','펌웨어'], ['package','구성품'],
+  ['actions','앱·웹·AI 실행'], ['led-notifications','LED·작업 알림'], ['via','VIA 설정'], ['layout','플레이트 배열'], ['firmware','펌웨어'], ['package','구성품'],
 ];
 
 function Combo({ keys, title, copy }: { keys:string[]; title:string; copy:string }) {
@@ -84,12 +84,26 @@ export default function GuidePage() {
             <div className="section-number">05</div><div className="section-copy"><p className="guide-eyebrow">ACTIONS · WINDOWS FIRST</p><h2>이제 실제 액션을 연결하세요</h2>
               <h3>설치 없이 사이트 안에서</h3><p>키를 선택하고 액션 유형을 지정하세요. 「웹사이트」에는 전체 웹주소, 「키보드」에는 Ctrl+Shift+S 같은 Windows 단축키를 입력합니다. 「AI·에이전트」는 사용할 AI 페이지와 지시문, 「시스템 → Copy text」는 복사할 텍스트를 설정합니다. 「저장 전 사이트에서 실행 테스트」로 먼저 확인한 뒤 「브라우저에 키 설정 저장」을 누르세요.</p>
               <p>USB-C로 기기에 적용한 뒤 키 테스트를 OFF, 사이트 실행 모드를 ON으로 전환하세요. 이 탭을 선택한 상태에서 실제 키를 누르면 저장한 액션을 처리합니다. 입력창 편집 중, 키 테스트 중, 다른 탭이나 프로그램에서는 실행하지 않습니다. 다른 키보드에서 같은 F13~F24 조합을 눌러도 반응할 수 있습니다.</p>
-              <h3>Photoshop 등 Windows 프로그램 실행</h3><p>앱 유형을 선택하고 Windows에 설치된 실제 .exe 경로를 넣습니다. 탐색기에서 실행 파일을 우클릭 → 「경로로 복사」를 이용하세요. 브라우저의 파일 선택 창은 전체 경로를 알려주지 않으므로 자동 검색을 제공하지 않습니다.</p>
+              <h3>Photoshop 등 Windows 프로그램 실행</h3><p>앱 유형을 선택하면 기본 실행 파일 이름이 준비됩니다. 「자동 검색」은 Windows 앱 등록 정보와 Program Files·LocalAppData를 먼저 확인합니다. 포터블 앱은 「.exe 파일 선택」으로 이름을 가져올 수 있습니다. 그래도 찾지 못하면 C,D처럼 드라이브를 지정해 전체 검색을 켜세요. 첫 검색은 오래 걸릴 수 있습니다.</p><p>브라우저 보안상 파일 선택 창은 전체 경로를 사이트에 공개하지 않습니다. 정확한 경로를 아는 경우에는 「직접 경로」를 선택하고 탐색기에서 경로를 복사해 붙여넣으세요. 실제 검색은 내려받은 Windows 연동 파일에서만 실행됩니다.</p>
               <div className="step-list"><div><b>1</b><span><strong>세부 설정 저장 → 기기에 적용</strong><small>프로그램 키에는 전용 F13~F24 조합이 기록됩니다. HOME/FN과 BT 보호 키는 유지합니다.</small></span></div><div><b>2</b><span><strong>AutoHotkey v2 한 번 설치</strong><small>사용할 Windows PC마다 공식 배포본을 설치하세요. 생성되는 설정 파일은 관리자 권한이나 자동 시작을 요청하지 않습니다. 회사 PC에서는 설치 정책을 확인하세요.</small></span></div><div><b>3</b><span><strong>Windows 실행 파일 받기 → 검토 → 실행</strong><small>사이트에서 저장한 설정으로 .ahk 파일을 만듭니다. 사이트 실행 모드는 OFF로 두세요. PC에서 이 파일이 실행 중이면 USB·Bluetooth 모두 사용할 수 있습니다.</small></span></div></div>
               <p>단축키는 키패드 자체가 보내므로 AutoHotkey가 필요 없습니다. 앱·웹·지시문·매크로는 .ahk 파일이 처리합니다. 프리셋이나 배열을 바꾸면 기기에 다시 적용하고 파일도 다시 받으세요. 여러 파일을 동시에 실행하지 마세요. 종료는 작업 표시줄의 AutoHotkey 아이콘 → Exit입니다.</p>
               <h3>AI와 매크로의 범위</h3><p>AI 액션은 지시문 복사와 AI 페이지 열기까지입니다. AI 서비스에서 직접 붙여넣고 전송하며, 응답이나 작업 완료 상태를 수집하지 않습니다. API 키나 비밀번호를 설정에 넣지 마세요. 매크로는 텍스트·웹주소·대기 1~16단계를 저장합니다. 사이트에서는 팝업·클립보드 권한 때문에 단계별 버튼으로 실행하고, Windows 파일에서는 순차 자동 실행합니다. Windows의 텍스트 단계는 현재 선택된 앱에 입력되므로 대상 창과 대기 시간을 먼저 확인하세요.</p>
               <aside className="callout"><b>‘기기 적용’과 ‘실행’은 다릅니다</b><p>기기 적용은 키코드 기록·읽기 검증입니다. 미설정 키는 기존 값을 유지하고 제외 개수를 표시합니다. 프로그램 존재 여부와 Windows 파일의 실제 동작은 대상 PC에서 확인해야 합니다. 자동 AI 작업, 임의 터미널 명령, 외부 에이전트 승인·중지 연동은 포함하지 않습니다.</p></aside>
               <div className="resource-row"><a href="https://www.autohotkey.com/" target="_blank" rel="noreferrer">AutoHotkey 공식 사이트 ↗</a><a href="https://developer.mozilla.org/en-US/docs/Web/API/Window/open" target="_blank" rel="noreferrer">브라우저 팝업 제한 ↗</a></div>
+            </div>
+          </section>
+
+          <section id="led-notifications" className="guide-section">
+            <div className="section-number">LED</div><div className="section-copy"><p className="guide-eyebrow">LIGHTING · EVENT NOTIFICATIONS</p><h2>LED로 작업 상태를 알려줄 수 있나요?</h2>
+              <h3>촬영 영상에 맞춘 유선 표시</h3><p>2026년 9월 12일 영상에서는 키 쪽 표시등이 흰색으로 유지되고, 바깥쪽 표시등은 청록 → 초록 → 노랑 → 분홍 → 보라 계열로 순환합니다. 3D의 기본 유선 표현은 이 모습을 재현합니다. 약 2초의 순환과 색·광량은 영상 기준 근사치이며, 기기의 실시간 측정값이 아닙니다. 설명서의 USB 기본 빨강은 별도 예시로 남겨 두었습니다.</p>
+              <h3>먼저 화면에서 알림 패턴 시험하기</h3><p>설정 화면의 3D 보기 아래 LED 패널에서 「완료」, 「사용량·오류 중단」, 「질문·승인 대기」를 선택하세요. 「알림 해제」는 USB 연결 상태 표시로 돌아갑니다. 이 버튼은 실제 작업이 완료됐다는 뜻이 아니며 기기 설정을 바꾸지 않습니다.</p>
+              <div className="step-list"><div><b>G</b><span><strong>완료 · 초록</strong><small>2.4초마다 부드럽게 점멸합니다.</small></span></div><div><b>R</b><span><strong>사용량·오류 중단 · 빨강</strong><small>초당 2.5회 점멸합니다. 일시적인 요청 제한과 사용량 소진은 서로 다른 원인으로 구분해야 합니다.</small></span></div><div><b>B</b><span><strong>질문·승인 대기 · 파랑</strong><small>초당 2.5회 점멸합니다. 모션 줄이기 또는 점멸 정지에서는 지속 점등합니다.</small></span></div></div>
+              <h3>실제 기기 LED 연동에 필요한 것</h3><p>제공된 LK-KINE VIA 정의에는 Lighting → logo의 색·밝기·효과·속도 항목이 있습니다. QMK/VIA에는 이 값을 USB로 읽고 바꾸는 통신 방식도 있습니다. 따라서 연동 가능성이 있지만, 이 기기의 펌웨어가 명령에 응답하는지, 어느 표시등을 바꾸는지, 연결·배터리 표시가 우선하는지는 실기 검증이 필요합니다. 두 LED를 각각 자유롭게 제어할 수 있다고 확인된 상태는 아닙니다.</p>
+              <p>구현 경로는 <b>앱의 작업 이벤트 → Windows 연동 프로그램 → USB LED 제어</b>입니다. 먼저 기존 조명을 읽어 백업하고, 일시적인 색 변경과 원상 복구를 검증해야 합니다. 이후 알림마다 저장 메모리를 다시 쓰지 않고 표시만 바꾸는 방식으로 확장합니다. Bluetooth 키 입력이 작동하더라도 같은 LED 설정 통신이 가능한 것은 아닙니다.</p>
+              <h3>앱마다 받을 수 있는 알림이 다릅니다</h3><p>Codex의 공식 notify 설정은 현재 agent-turn-complete 이벤트를 제공합니다. 이는 응답 차례의 종료이며 요청한 모든 작업의 성공을 보증하지 않습니다. 이 설정 하나로 질문·승인·사용량 소진까지 모두 구분할 수는 없습니다. 지금 사용하는 Codex 데스크톱과 이 사이트 사이에도 자동 알림 연결은 없습니다.</p>
+              <p>Claude Code는 Stop, StopFailure, Notification 등의 훅을 제공합니다. 지원되는 이벤트를 분류해 연동할 수 있지만, 질문 대기와 승인 요청은 사용하는 버전과 이벤트 종류를 확인해야 합니다. 일반 웹사이트나 Photoshop 작업은 해당 서비스의 웹훅·플러그인·API 등 별도 이벤트 출처가 필요합니다. 사이트 탭만 열어 두어서는 다른 앱의 완료 상태를 알 수 없습니다.</p>
+              <aside className="callout"><b>현재 제공 범위</b><p>영상 기반 3D 조명과 수동 알림 미리보기까지 구현되어 있습니다. 실제 LED 쓰기, Windows 상주 연동 프로그램, 앱별 이벤트 연결은 아직 제공하지 않습니다. 기존에 받는 AutoHotkey 실행 파일도 LED 알림 기능은 포함하지 않습니다.</p></aside>
+              <div className="resource-row"><a href="https://learn.chatgpt.com/docs/config-file/config-advanced#notifications" target="_blank" rel="noreferrer">OpenAI 공식 알림 문서 ↗</a><a href="https://code.claude.com/docs/en/hooks" target="_blank" rel="noreferrer">Claude Code 훅 ↗</a><a href="https://github.com/qmk/qmk_firmware/blob/master/quantum/via.c" target="_blank" rel="noreferrer">QMK/VIA 조명 통신 ↗</a></div>
             </div>
           </section>
 
