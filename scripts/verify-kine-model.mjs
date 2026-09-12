@@ -79,7 +79,7 @@ const pairing = resolveKineLeds({ ...DEFAULT_LED_SETTINGS, scenario: 'bt-pairing
 assert.match(pairing.title, /BT3/); assert.match(pairing.note, /LK-KINE-BT3/);
 assert.equal(pairing.signals[1].color, '#22dd55');
 assert.equal(ledLevel(pairing.signals[1], 100, false), 1); assert.equal(ledLevel(pairing.signals[1], 250, false), 0);
-for (const [scenario, count, color] of [['battery-high', 2, '#43ed72'], ['battery-mid', 1, '#43ed72'], ['battery-low', 1, '#ffd83d']]) {
+for (const [scenario, count, color] of [['battery-high', 2, '#00ee42'], ['battery-mid', 1, '#00ee42'], ['battery-low', 1, '#ffcc00']]) {
   const state = resolveKineLeds({ ...DEFAULT_LED_SETTINGS, scenario }, false);
   assert.equal(state.signals.filter(s => s.pattern !== 'off').length, count);
   assert.equal(state.signals[1].color, color);
@@ -101,6 +101,12 @@ for (const plate of ['A', 'B', 'C', 'D']) for (const mirrored of [false, true]) 
   }
   const keys = placements.map(k => ({ id: k.matrix, matrix: k.matrix, label: k.matrix, glyph: 'NK', protected: false }));
   const model = createKineModel(plate, mirrored, keys, 'silver');
+  assert.equal(model.ledCores.length, 2);
+  for (const core of model.ledCores) {
+    assert.equal(core.material.toneMapped, false, 'LED hue must not bleach under scene tone mapping');
+    assert.equal(core.material.opacity, 0, 'Emitter starts dark before a status is resolved');
+    assert.ok(core.position.y < 15.6, 'Emitter remains recessed inside the indicator bore');
+  }
   assert.equal(model.cable.visible, false, 'No cable before USB confirmation');
   assert.equal(model.cable.position.z, -KINE_SIZE.depth / 2 - .15, 'Cable is anchored to the actual rear USB port');
   const cableBounds = new THREE.Box3().setFromObject(model.cable);

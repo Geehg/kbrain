@@ -165,6 +165,7 @@ export function createKineModel(plate: PlateId, mirrored: boolean, keys: ModelKe
   }
   const ledMaterials: THREE.MeshStandardMaterial[] = [];
   const ledLights: THREE.PointLight[] = [], ledHalos: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>[] = [];
+  const ledCores: THREE.Mesh<THREE.CircleGeometry, THREE.MeshBasicMaterial>[] = [];
   const haloTexture = ledHaloTexture();
   const boreMaterial = new THREE.MeshStandardMaterial({ color: '#626765', metalness: .72, roughness: .43, side: THREE.DoubleSide });
   for (let i = 0; i < 2; i++) {
@@ -174,9 +175,14 @@ export function createKineModel(plate: PlateId, mirrored: boolean, keys: ModelKe
     const led = new THREE.Mesh(i ? new THREE.SphereGeometry(1.78, 40, 20) : new THREE.CylinderGeometry(1.78, 1.78, .18, 40), mat);
     if (i) led.scale.y = .3;
     led.position.set(38.7 + i * 7, 14.85, 61.6); led.name = 'recessed-indicator-lens'; led.userData.part = 'leds'; root.add(led);
-    const light = new THREE.PointLight('#ffffff', 0, 13, 2);
+    // A color-preserving emitter inside the bore avoids ACES bleaching the
+    // saturated LED into white. The physical lens still supplies depth/speculars.
+    const core = new THREE.Mesh(new THREE.CircleGeometry(1.67, 48), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, toneMapped: false, depthWrite: false }));
+    core.rotation.x = -Math.PI / 2; core.position.set(38.7 + i * 7, 15.43, 61.6); core.raycast = () => {};
+    core.name = 'color-preserving-led-emitter'; root.add(core); ledCores.push(core);
+    const light = new THREE.PointLight('#ffffff', 0, 18, 2);
     light.position.set(38.7 + i * 7, 16.8, 61.6); root.add(light); ledLights.push(light);
-    const halo = new THREE.Mesh(new THREE.PlaneGeometry(11, 11), new THREE.MeshBasicMaterial({ map: haloTexture, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    const halo = new THREE.Mesh(new THREE.PlaneGeometry(15, 15), new THREE.MeshBasicMaterial({ map: haloTexture, transparent: true, opacity: 0, blending: THREE.NormalBlending, depthWrite: false, toneMapped: false }));
     halo.rotation.x = -Math.PI / 2; halo.position.set(38.7 + i * 7, 16.34, 61.6); halo.raycast = () => {};
     root.add(halo); ledHalos.push(halo);
   }
@@ -245,5 +251,5 @@ export function createKineModel(plate: PlateId, mirrored: boolean, keys: ModelKe
   root.traverse(object => {
     if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshStandardMaterial && object.material.bumpMap === grain) machinedUV(object.geometry);
   });
-  return { root, keyMeshes, rollerGroup, switchThumb, ledMaterials, ledLights, ledHalos, cable, framingBounds };
+  return { root, keyMeshes, rollerGroup, switchThumb, ledMaterials, ledLights, ledHalos, ledCores, cable, framingBounds };
 }

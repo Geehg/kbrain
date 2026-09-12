@@ -2,7 +2,7 @@ export type LedScenario = 'auto' | 'usb-video' | 'usb' | 'bt-pairing' | 'receive
 export type LedPattern = 'off' | 'steady' | 'pairing' | 'warning' | 'spectrum' | 'breathe';
 export type LedSignal = { color: string; pattern: LedPattern };
 export type LedSettings = { scenario: LedScenario; slot: '1' | '2' | '3'; color: string; brightness: number; spill: boolean; paused: boolean; numLock: boolean };
-export const DEFAULT_LED_SETTINGS: LedSettings = { scenario: 'auto', slot: '1', color: '#438dff', brightness: 75, spill: true, paused: false, numLock: false };
+export const DEFAULT_LED_SETTINGS: LedSettings = { scenario: 'auto', slot: '1', color: '#0066ff', brightness: 90, spill: true, paused: false, numLock: false };
 export const LED_SCENARIOS: [LedScenario, string][] = [
   ['auto', 'USB 연결 시 · 촬영 영상 재현'], ['usb-video', '촬영 영상 · 흰색 + RGB 순환'], ['usb', '설명서 · USB 기본 빨강'], ['bt-pairing', 'Bluetooth 페어링 예시'],
   ['receiver-pairing', '2.4GHz 페어링 예시'], ['wireless', '사용자 색상 · 지속 점등'],
@@ -13,9 +13,9 @@ export const LED_SCENARIOS: [LedScenario, string][] = [
 const off = (): LedSignal => ({ color: '#000000', pattern: 'off' });
 const on = (color: string, pattern: LedPattern = 'steady'): LedSignal => ({ color, pattern });
 export const LED_ALERTS = [
-  { scenario: 'complete', label: '완료', color: '#43ed72', pattern: 'breathe', timing: '2.4초마다 부드럽게 점멸' },
-  { scenario: 'blocked', label: '사용량·오류 중단', color: '#ff3020', pattern: 'pairing', timing: '초당 2.5회 빠른 점멸' },
-  { scenario: 'question', label: '질문·승인 대기', color: '#438dff', pattern: 'pairing', timing: '초당 2.5회 빠른 점멸' },
+  { scenario: 'complete', label: '완료', color: '#00ee42', pattern: 'breathe', timing: '2.4초마다 부드럽게 점멸' },
+  { scenario: 'blocked', label: '사용량·오류 중단', color: '#ff1200', pattern: 'pairing', timing: '초당 2.5회 빠른 점멸' },
+  { scenario: 'question', label: '질문·승인 대기', color: '#0066ff', pattern: 'pairing', timing: '초당 2.5회 빠른 점멸' },
 ] as const;
 
 // Manual pp. 03/04/09/11. No firmware telemetry is inferred from a preview.
@@ -26,11 +26,11 @@ export function resolveKineLeds(settings: LedSettings, usbConnected: boolean) {
   let note = '실제 LED·Num Lock·무선·배터리 상태는 수신되지 않습니다. 소등 표시는 연결 확인 전의 화면 표현입니다.';
   const simulated = scenario !== 'auto';
   if ((scenario === 'auto' && usbConnected) || scenario === 'usb-video') {
-    signals = [on('#eff8ff'), on('#3df5ed', 'spectrum')];
+    signals = [on('#eff8ff'), on('#00fff0', 'spectrum')];
     title = '촬영 영상 재현 · 흰색 고정 + RGB 순환';
     note = '2026.09.12 촬영 영상의 키 쪽 흰색 표시등과 바깥쪽 RGB 표시등을 재현합니다. 약 2초의 색 순환과 빛 번짐은 영상 기준 근사값입니다. 실제 Num Lock·LED 설정을 읽은 값이나 모든 USB 장치의 기본 상태가 아닙니다.';
   } else if (scenario === 'usb') {
-    signals[1] = on('#ff3020'); title = 'USB 유선 · 기본 빨강'; note = '설명서 p03의 기본 색상입니다. 기기에서 색을 변경했다면 사용자 색상 예시를 이용하세요.';
+    signals[1] = on('#ff1200'); title = 'USB 유선 · 기본 빨강'; note = '설명서 p03의 기본 색상입니다. 기기에서 색을 변경했다면 사용자 색상 예시를 이용하세요.';
   } else if (scenario === 'bt-pairing' || scenario === 'receiver-pairing') {
     signals[1] = on(settings.color, 'pairing');
     title = scenario === 'bt-pairing' ? `BT${settings.slot} · 페어링 빠른 점멸` : '2.4GHz · 페어링 빠른 점멸';
@@ -47,8 +47,8 @@ export function resolveKineLeds(settings: LedSettings, usbConnected: boolean) {
     title = `${alert.label} · ${alert.timing}`;
     note = '화면에서만 시험하는 알림 패턴입니다. 현재 앱·AI 이벤트 수신과 기기 LED 전송은 연결되어 있지 않습니다. 알림 해제 시 USB 연결 상태 표시로 돌아갑니다.';
   } else if (scenario.startsWith('battery-') || scenario === 'low-voltage') {
-    signals = scenario === 'battery-high' ? [on('#43ed72'), on('#43ed72')]
-      : [off(), on(scenario === 'battery-mid' ? '#43ed72' : scenario === 'battery-low' ? '#ffd83d' : '#ff3020', scenario === 'low-voltage' ? 'warning' : 'steady')];
+    signals = scenario === 'battery-high' ? [on('#00ee42'), on('#00ee42')]
+      : [off(), on(scenario === 'battery-mid' ? '#00ee42' : scenario === 'battery-low' ? '#ffcc00' : '#ff1200', scenario === 'low-voltage' ? 'warning' : 'steady')];
     title = LED_SCENARIOS.find(([id]) => id === scenario)![1];
     note = '실제 Home+Pause를 길게 눌러 배터리를 확인하세요. 설명서 p11의 색/개수 예시이며 측정값이 아닙니다. 한 개만 켜지는 위치와 점멸 주기는 설명서에 없어 화면용으로 배치했습니다.';
   } else if (scenario === 'off') {
@@ -76,5 +76,5 @@ export function ledLevel(signal: LedSignal, elapsedMs: number, freeze: boolean) 
 export function ledColor(signal: LedSignal, elapsedMs: number, freeze: boolean) {
   if (signal.pattern !== 'spectrum' || freeze) return signal.color;
   const hue = ((180 - elapsedMs / 2100 * 360) % 360 + 360) % 360;
-  return `hsl(${hue.toFixed(2)}, 90%, 60%)`;
+  return `hsl(${hue.toFixed(2)}, 100%, 50%)`;
 }

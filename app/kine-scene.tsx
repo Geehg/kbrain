@@ -11,7 +11,7 @@ type View = 'perspective' | 'top' | 'bottom' | 'left' | 'right' | 'ports' | 'led
 type Props = {
   plate: PlateId; mirrored: boolean; rotation: Rotation; keys: ModelKey[];
   selectedId: string; pressed: Set<MatrixAddress>; tested: Set<MatrixAddress>;
-  connected: boolean; onSelect: (id: string) => void; onFallback: () => void;
+  connected: boolean; onSelect: (id: string) => void;
 };
 type SceneApi = {
   rebuild: (props: Props, finish: Finish) => void;
@@ -219,10 +219,11 @@ export default function KineScene(props: Props) {
           const color = ledColor(signal, now - ledEpoch, freezeLeds);
           const strength = level * Math.max(0, Math.min(100, currentLedSettings.brightness)) / 100;
           const material = model.ledMaterials[i];
-          material.color.set(i ? '#c5cac7' : '#51585a').lerp(new THREE.Color(color), strength * .45);
-          material.emissive.set(color); material.emissiveIntensity = strength * 4.2;
-          model.ledLights[i].color.set(color); model.ledLights[i].intensity = currentLedSettings.spill ? strength * 32 : 0;
-          model.ledHalos[i].material.color.set(color); model.ledHalos[i].material.opacity = currentLedSettings.spill ? strength * .7 : 0;
+          material.color.set(i ? '#c5cac7' : '#51585a').lerp(new THREE.Color(color), strength * .8);
+          material.emissive.set(color); material.emissiveIntensity = strength * 2;
+          model.ledCores[i].material.color.set(color); model.ledCores[i].material.opacity = strength * .98;
+          model.ledLights[i].color.set(color); model.ledLights[i].intensity = currentLedSettings.spill ? strength * 60 : 0;
+          model.ledHalos[i].material.color.set(color); model.ledHalos[i].material.opacity = currentLedSettings.spill ? strength * .95 : 0;
           if (!freezeLeds && signal.pattern !== 'off' && signal.pattern !== 'steady') animating = true;
         }
         for (const key of model.keyMeshes) {
@@ -242,7 +243,7 @@ export default function KineScene(props: Props) {
       const observer = new ResizeObserver(resize); observer.observe(mount);
       const visibility = new IntersectionObserver(entries => { visible = entries[0].isIntersecting && !document.hidden; if (visible) wake(); }); visibility.observe(mount);
       const pageVisibility = () => { visible = !document.hidden; if (visible) wake(); };
-      const contextLost = (event: Event) => { event.preventDefault(); lost = true; setError('3D 표시가 중단되었습니다. 새로고침하거나 2D 편집으로 계속할 수 있습니다.'); };
+      const contextLost = (event: Event) => { event.preventDefault(); lost = true; setError('3D 표시가 중단되었습니다. 새로고침 후 다시 시도하세요. 키 설정은 화면의 이전·다음 키 버튼으로 계속할 수 있습니다.'); };
       const interaction = () => { transition = false; wake(); };
       const motionChanged = () => { if (reduced.matches) { controls.autoRotate = false; setSpinning(false); } wake(); };
       renderer.domElement.addEventListener('pointerdown', down);
@@ -274,7 +275,7 @@ export default function KineScene(props: Props) {
         disposeModel(model.root); environment.dispose(); renderer.dispose(); renderer.domElement.remove(); apiRef.current = null;
       };
     }
-    void initialize().catch(() => { if (!cancelled) setError('이 환경에서는 3D를 표시할 수 없습니다. 브라우저의 하드웨어 가속을 확인하거나 2D 편집을 이용하세요.'); });
+    void initialize().catch(() => { if (!cancelled) setError('이 환경에서는 3D를 표시할 수 없습니다. 브라우저의 하드웨어 가속을 확인하세요. 키 설정은 화면의 이전·다음 키 버튼으로 계속할 수 있습니다.'); });
     return () => { cancelled = true; cleanup?.(); };
   }, []);
 
@@ -295,7 +296,7 @@ export default function KineScene(props: Props) {
       <div className="kine-stage-heading"><b>NOVA KINE</b><span>360° PRODUCT VIEW</span><span className={`kine-cable-status ${props.connected ? 'connected' : ''}`} role="status">{props.connected ? 'USB 모드 · 연결 확인됨' : 'USB-C 연결 확인 전'}</span></div>
       <div ref={mountRef} className="kine-canvas" />
       {!ready && !error && <div className="kine-loading" role="status">3D 모델을 준비하고 있습니다…</div>}
-      {error && <div className="kine-error" role="alert"><p>{error}</p><button onClick={props.onFallback}>2D 편집으로 전환</button></div>}
+      {error && <div className="kine-error" role="alert"><p>{error}</p><button onClick={() => window.location.reload()}>새로고침</button></div>}
       <div className="kine-zoom"><button aria-label="3D 확대" disabled={!ready || !!error} onClick={() => apiRef.current?.zoom(.87)}>＋</button><button aria-label="3D 축소" disabled={!ready || !!error} onClick={() => apiRef.current?.zoom(1.15)}>−</button></div>
       <div className="kine-stage-caption"><span>드래그 회전 · 휠/핀치 확대 · 키 클릭 선택</span><b>{props.plate} / {props.rotation}°</b></div>
       {part && <aside className="kine-part-info" aria-live="polite"><button className="kine-info-close" aria-label="부품 안내 닫기" onClick={() => setPart(null)}>×</button><strong>{parts[part].title}</strong><p>{parts[part].copy}</p>{part === 'usb' && <p>{props.connected ? '설정 사이트가 장치 응답을 확인해 케이블을 표시합니다. 연결을 해제하면 사라집니다.' : '케이블을 꽂은 뒤 사이트의 「장치 연결」을 완료하면 모형에도 표시됩니다. LED 예시 선택과는 별개입니다.'}</p>}{part === 'power' && <button className="kine-power" aria-pressed={powerOn} onClick={() => setPowerOn(value => !value)}>모형 스위치 {powerOn ? 'ON' : 'OFF'}</button>}</aside>}
