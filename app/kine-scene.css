@@ -21,6 +21,20 @@
 .kine-canvas { height:clamp(390px,41vw,560px); width:100%; }
 .kine-canvas canvas { display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
 .kine-canvas canvas:active { cursor:grabbing; }
+.kine-studio-controls { display:flex; flex-wrap:wrap; align-items:center; gap:12px 18px; padding:14px 16px; border-top:1px solid #d9dfda; background:#eef1ed; font-size:14px; }
+.kine-light-modes { display:flex; gap:3px; padding:3px; border:1px solid #c9d0c5; border-radius:8px; background:#e2e7df; }
+.kine-light-modes button { padding:8px 12px; border:0; border-radius:5px; background:transparent; font-size:14px; color:#52604d; }
+.kine-light-modes button[aria-pressed=true] { background:#24302b; color:#f2f7ed; }
+.kine-studio-controls label { display:flex; align-items:center; gap:7px; cursor:pointer; }
+.kine-studio-controls input[type=checkbox] { width:15px; height:15px; accent-color:#657d34; }
+.kine-studio-controls small { color:#687460; font-size:12px; }
+.kine-light-strength { margin-left:auto; }.kine-light-strength input { width:90px; accent-color:#657d34; }.kine-light-strength output { min-width:40px; font-size:12px; }
+.kine-cinematic .kine-canvas-wrap { background:#101823; }
+.kine-cinematic .kine-stage-heading b { color:#e1eaf3; }
+.kine-cinematic .kine-stage-heading>span:not(.kine-cable-status),.kine-cinematic .kine-stage-caption { color:#adbdcc; }
+.kine-cinematic .kine-stage-heading .kine-cable-status { background:#182331dc; border-color:#3b4e60; color:#b8c8d7; }
+.kine-cinematic .kine-zoom { border-color:#405065; }.kine-cinematic .kine-zoom button { background:#182331e8; color:#e3edf8; }
+@media(max-width:760px) { .kine-light-strength { margin-left:0; flex-basis:100%; }.kine-light-strength input { flex:1; max-width:220px; } }
 .kine-stage-heading { position:absolute; left:22px; top:20px; display:grid; gap:6px; pointer-events:none; z-index:1; }
 .kine-stage-heading b { font:800 14px var(--font-geist-mono),monospace; letter-spacing:.17em; color:#3e4b48; }
 .kine-stage-heading span { font:500 12px var(--font-geist-mono),monospace; letter-spacing:.07em; color:#75827e; }

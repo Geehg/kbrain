@@ -2,7 +2,7 @@ export type LedScenario = 'auto' | 'usb-video' | 'usb' | 'bt-pairing' | 'receive
 export type LedPattern = 'off' | 'steady' | 'pairing' | 'warning' | 'spectrum' | 'breathe';
 export type LedSignal = { color: string; pattern: LedPattern };
 export type LedSettings = { scenario: LedScenario; slot: '1' | '2' | '3'; color: string; brightness: number; spill: boolean; paused: boolean; numLock: boolean };
-export const DEFAULT_LED_SETTINGS: LedSettings = { scenario: 'auto', slot: '1', color: '#0066ff', brightness: 90, spill: true, paused: false, numLock: false };
+export const DEFAULT_LED_SETTINGS: LedSettings = { scenario: 'auto', slot: '1', color: '#0066ff', brightness: 85, spill: true, paused: false, numLock: false };
 export const LED_SCENARIOS: [LedScenario, string][] = [
   ['auto', 'USB 연결 시 · 촬영 영상 재현'], ['usb-video', '촬영 영상 · 흰색 + RGB 순환'], ['usb', '설명서 · USB 기본 빨강'], ['bt-pairing', 'Bluetooth 페어링 예시'],
   ['receiver-pairing', '2.4GHz 페어링 예시'], ['wireless', '사용자 색상 · 지속 점등'],

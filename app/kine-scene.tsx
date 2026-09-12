@@ -8,6 +8,8 @@ import { DEFAULT_LED_SETTINGS, ledColor, ledLevel, resolveKineLeds, type LedSett
 import './kine-scene.css';
 
 type View = 'perspective' | 'top' | 'bottom' | 'left' | 'right' | 'ports' | 'leds';
+type StageSettings = { cinematic: boolean; floating: boolean; shadows: boolean; intensity: number };
+const DEFAULT_STAGE: StageSettings = { cinematic: false, floating: true, shadows: true, intensity: 100 };
 type Props = {
   plate: PlateId; mirrored: boolean; rotation: Rotation; keys: ModelKey[];
   selectedId: string; pressed: Set<MatrixAddress>; tested: Set<MatrixAddress>;
@@ -19,6 +21,7 @@ type SceneApi = {
   view: (view: View) => void; zoom: (factor: number) => void;
   spin: (enabled: boolean) => void; power: (on: boolean) => void;
   leds: (settings: LedSettings) => void;
+  stage: (settings: StageSettings) => void;
 };
 
 const views: [View, string][] = [['perspective', '입체'], ['top', '앞면'], ['bottom', '뒷면'], ['left', '왼쪽'], ['right', '오른쪽'], ['ports', 'USB 측면']];
@@ -45,10 +48,13 @@ export default function KineScene(props: Props) {
   const [powerOn, setPowerOn] = useState(true);
   const [ledSettings, setLedSettings] = useState<LedSettings>(DEFAULT_LED_SETTINGS);
   const ledSettingsRef = useRef(ledSettings);
+  const [stage, setStage] = useState<StageSettings>(DEFAULT_STAGE);
+  const stageRef = useRef(stage);
   const keySignature = useMemo(() => JSON.stringify(props.keys), [props.keys]);
 
   useEffect(() => { propsRef.current = props; apiRef.current?.sync(props, labels); }, [props, labels]);
   useEffect(() => { ledSettingsRef.current = ledSettings; apiRef.current?.leds(ledSettings); }, [ledSettings]);
+  useEffect(() => { stageRef.current = stage; apiRef.current?.stage(stage); }, [stage]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -63,7 +69,7 @@ export default function KineScene(props: Props) {
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .95;
-      renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
+      renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.VSMShadowMap;
       renderer.domElement.setAttribute('aria-label', 'NOVA KINE 3D 모델. 드래그로 회전, 휠로 확대, 키를 클릭해 선택. 방향키로 시점 이동, 더하기와 빼기로 확대 축소.');
       renderer.domElement.tabIndex = 0; mount.appendChild(renderer.domElement);
       const scene = new THREE.Scene();
@@ -79,10 +85,41 @@ export default function KineScene(props: Props) {
       const hemi = new THREE.HemisphereLight('#f4f8ff', '#79848a', 1.1); scene.add(hemi);
       const keyLight = new THREE.DirectionalLight('#ffffff', 2.1); keyLight.position.set(-90, 180, 40); keyLight.castShadow = true;
       Object.assign(keyLight.shadow.camera, { left: -120, right: 120, top: 120, bottom: -120, near: 1, far: 450 });
-      keyLight.shadow.mapSize.set(1024, 1024); keyLight.shadow.bias = -.001; keyLight.shadow.normalBias = .12; scene.add(keyLight);
+      keyLight.shadow.mapSize.set(512, 512); keyLight.shadow.bias = -.001; keyLight.shadow.normalBias = .12; scene.add(keyLight);
+      keyLight.shadow.radius = 14; keyLight.shadow.blurSamples = 16;
       const fill = new THREE.DirectionalLight('#c5d6ed', 1.2); fill.position.set(80, -100, -90); scene.add(fill);
+      const rim = new THREE.DirectionalLight('#8fbbff', .5); rim.position.set(60, 90, -120); scene.add(rim);
+      const rig = new THREE.Group(); scene.add(rig);
+      const shadowMaterial = new THREE.ShadowMaterial({ color: '#1c242a', opacity: .3 });
+      const cinemaFloor = new THREE.MeshStandardMaterial({ color: '#18212f', metalness: .08, roughness: .92 });
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), shadowMaterial as InstanceType<typeof THREE.Material>);
+      floor.rotation.x = -Math.PI / 2; floor.position.y = -8; floor.receiveShadow = true; scene.add(floor);
+      let currentStage = stageRef.current;
+      let activeView: View = 'perspective';
+      const applyPose = () => {
+        const floating = activeView === 'perspective' && currentStage.floating;
+        rig.position.y = floating ? 28 : 0;
+        rig.rotation.set(floating ? -.09 : 0, 0, floating ? -.12 : 0);
+        rig.updateMatrixWorld(true);
+        floor.visible = activeView === 'perspective' && currentStage.shadows;
+      };
+      const applyLighting = () => {
+        const gain = Math.max(.6, Math.min(1.4, currentStage.intensity / 100));
+        const cinema = currentStage.cinematic;
+        scene.background = cinema ? new THREE.Color('#101823') : null;
+        scene.fog = cinema ? new THREE.FogExp2('#101823', .0018) : null;
+        scene.environmentIntensity = cinema ? .65 : 1;
+        hemi.intensity = (cinema ? .3 : 1.1) * gain;
+        keyLight.color.set(cinema ? '#ffe2bc' : '#ffffff'); keyLight.intensity = (cinema ? 4.2 : 2.1) * gain;
+        fill.color.set(cinema ? '#83b6ff' : '#c5d6ed'); fill.intensity = (cinema ? 1.5 : 1.2) * gain;
+        rim.intensity = (cinema ? 4 : .5) * gain;
+        renderer.toneMappingExposure = cinema ? .98 : .95;
+        floor.material = cinema ? cinemaFloor : shadowMaterial;
+        keyLight.castShadow = currentStage.shadows;
+        applyPose();
+      };
       let model = createKineModel(propsRef.current.plate, propsRef.current.mirrored, propsRef.current.keys, 'silver');
-      scene.add(model.root);
+      rig.add(model.root); applyLighting();
       const raycaster = new THREE.Raycaster(); const pointer = new THREE.Vector2();
       const targetPosition = camera.position.clone(); const targetFocus = controls.target.clone();
       let transition = false; let virtualPress: string | null = null; let pressUntil = 0; let rollerTarget = 0;
@@ -116,6 +153,7 @@ export default function KineScene(props: Props) {
         updateLeds(); wake();
       };
       const chooseView = (next: View) => {
+        activeView = next; applyPose();
         const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
         // Camera positions are relative to the device so named sides stay correct
         // when the user changes the portrait/landscape orientation.
@@ -125,12 +163,17 @@ export default function KineScene(props: Props) {
         };
         targetPosition.set(...vectors[next]).normalize();
         if (next === 'left' || next === 'right' || next === 'ports' || next === 'leds') targetPosition.applyAxisAngle(new THREE.Vector3(0, 1, 0), model.root.rotation.y);
-        targetFocus.set(0, 10, 0);
+        targetFocus.set(0, 10, 0).applyMatrix4(rig.matrixWorld);
         // Fit the actual rotated case bounds, including its depth in perspective.
-        model.root.updateMatrixWorld(true);
+        model.root.updateWorldMatrix(true, false);
         const bounds = model.framingBounds.clone();
         if (model.cable.visible) bounds.expandByPoint(model.cable.position.clone().add(new THREE.Vector3(0, 4, -28)));
         bounds.applyMatrix4(model.root.matrixWorld);
+        if (next === 'perspective' && currentStage.shadows) {
+          // Fit the receiver as well as the lifted body; do not clip the shadow.
+          bounds.min.y = floor.position.y;
+          bounds.max.x += 18; bounds.max.z += 12;
+        }
         const right = new THREE.Vector3(0, 1, 0).cross(targetPosition).normalize();
         const up = targetPosition.clone().cross(right).normalize();
         let distance = controls.minDistance;
@@ -138,7 +181,7 @@ export default function KineScene(props: Props) {
           const corner = new THREE.Vector3(x, y, z).sub(targetFocus);
           distance = Math.max(distance, corner.dot(targetPosition) + Math.max(Math.abs(corner.dot(up)) / Math.tan(halfFov), Math.abs(corner.dot(right)) / (Math.tan(halfFov) * camera.aspect)));
         }
-        targetPosition.multiplyScalar(distance * 1.2).add(targetFocus);
+        targetPosition.multiplyScalar(distance * (next === 'perspective' ? 1.03 : 1.2)).add(targetFocus);
         if (next === 'leds') {
           targetFocus.set(42.2, 15.5, 52).applyAxisAngle(new THREE.Vector3(0, 1, 0), model.root.rotation.y);
           targetPosition.set(...vectors.leds).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), model.root.rotation.y).multiplyScalar(Math.max(84, 58 / camera.aspect)).add(targetFocus);
@@ -216,14 +259,14 @@ export default function KineScene(props: Props) {
         const freezeLeds = reduced.matches || currentLedSettings.paused;
         for (let i = 0; i < 2; i++) {
           const signal = currentLeds.signals[i], level = ledLevel(signal, now - ledEpoch, freezeLeds);
-          const color = ledColor(signal, now - ledEpoch, freezeLeds);
+          const color = new THREE.Color(ledColor(signal, now - ledEpoch, freezeLeds)).offsetHSL(0, -.08, 0);
           const strength = level * Math.max(0, Math.min(100, currentLedSettings.brightness)) / 100;
           const material = model.ledMaterials[i];
           material.color.set(i ? '#c5cac7' : '#51585a').lerp(new THREE.Color(color), strength * .8);
-          material.emissive.set(color); material.emissiveIntensity = strength * 2;
-          model.ledCores[i].material.color.set(color); model.ledCores[i].material.opacity = strength * .98;
-          model.ledLights[i].color.set(color); model.ledLights[i].intensity = currentLedSettings.spill ? strength * 60 : 0;
-          model.ledHalos[i].material.color.set(color); model.ledHalos[i].material.opacity = currentLedSettings.spill ? strength * .95 : 0;
+          material.emissive.set(color); material.emissiveIntensity = strength * 1.8;
+          model.ledCores[i].material.color.set(color); model.ledCores[i].material.opacity = strength * .84;
+          model.ledLights[i].color.set(color); model.ledLights[i].intensity = currentLedSettings.spill ? strength * 45 : 0;
+          model.ledHalos[i].material.color.set(color); model.ledHalos[i].material.opacity = currentLedSettings.spill ? strength * .78 : 0;
           if (!freezeLeds && signal.pattern !== 'off' && signal.pattern !== 'steady') animating = true;
         }
         for (const key of model.keyMeshes) {
@@ -256,13 +299,19 @@ export default function KineScene(props: Props) {
       controls.addEventListener('start', interaction); controls.addEventListener('change', wake);
       apiRef.current = {
         rebuild: (p, nextFinish) => {
-          scene.remove(model.root); disposeModel(model.root);
-          model = createKineModel(p.plate, p.mirrored, p.keys, nextFinish); scene.add(model.root);
+          rig.remove(model.root); disposeModel(model.root);
+          model = createKineModel(p.plate, p.mirrored, p.keys, nextFinish); rig.add(model.root);
           rollerTarget = 0; sync(p, labelsVisible);
         }, sync, view: chooseView, zoom,
         spin: enabled => { controls.autoRotate = enabled; transition = false; wake(); },
         power: on => { model.switchThumb.position.x = on ? -1.8 : 1.8; wake(); },
         leds: settings => { currentLedSettings = settings; updateLeds(); wake(); },
+        stage: settings => {
+          const poseChanged = settings.floating !== currentStage.floating || settings.shadows !== currentStage.shadows;
+          currentStage = settings; applyLighting();
+          if (poseChanged) chooseView(activeView);
+          wake();
+        },
       };
       // Preserve a single renderer across preset and input updates.
       sync(propsRef.current, true); resize(); chooseView('perspective'); setReady(true);
@@ -272,7 +321,9 @@ export default function KineScene(props: Props) {
         document.removeEventListener('visibilitychange', pageVisibility); reduced.removeEventListener('change', motionChanged);
         renderer.domElement.removeEventListener('pointerdown', down); renderer.domElement.removeEventListener('pointermove', move); renderer.domElement.removeEventListener('pointerup', up);
         renderer.domElement.removeEventListener('pointercancel', cancel); renderer.domElement.removeEventListener('keydown', keyboard); renderer.domElement.removeEventListener('webglcontextlost', contextLost);
-        disposeModel(model.root); environment.dispose(); renderer.dispose(); renderer.domElement.remove(); apiRef.current = null;
+        disposeModel(model.root); floor.geometry.dispose(); shadowMaterial.dispose(); cinemaFloor.dispose();
+        keyLight.shadow.map?.dispose(); keyLight.shadow.mapPass?.dispose();
+        environment.dispose(); renderer.dispose(); renderer.domElement.remove(); apiRef.current = null;
       };
     }
     void initialize().catch(() => { if (!cancelled) setError('이 환경에서는 3D를 표시할 수 없습니다. 브라우저의 하드웨어 가속을 확인하세요. 키 설정은 화면의 이전·다음 키 버튼으로 계속할 수 있습니다.'); });
@@ -290,16 +341,22 @@ export default function KineScene(props: Props) {
     mountRef.current?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   };
 
-  return <section className="kine-viewer" aria-label="NOVA KINE 3D 편집기">
+  return <section className={`kine-viewer ${stage.cinematic ? 'kine-cinematic' : ''}`} aria-label="NOVA KINE 3D 편집기">
     <div className="kine-viewbar"><div className="kine-view-presets" aria-label="3D 시점">{views.map(([id, label]) => <button key={id} aria-pressed={view === id} disabled={!ready || !!error} onClick={() => selectView(id)}>{label}</button>)}</div><button className="kine-reset" disabled={!ready || !!error} onClick={() => selectView('perspective')} title="처음 시점으로">↺ <span>시점 초기화</span></button></div>
     <div className="kine-canvas-wrap">
-      <div className="kine-stage-heading"><b>NOVA KINE</b><span>360° PRODUCT VIEW</span><span className={`kine-cable-status ${props.connected ? 'connected' : ''}`} role="status">{props.connected ? 'USB 모드 · 연결 확인됨' : 'USB-C 연결 확인 전'}</span></div>
+      <div className="kine-stage-heading"><b>NOVA KINE</b><span>{stage.cinematic ? 'CINEMATIC LIGHTING' : '360° PRODUCT VIEW'}</span><span className={`kine-cable-status ${props.connected ? 'connected' : ''}`} role="status">{props.connected ? 'USB 모드 · 연결 확인됨' : 'USB-C 연결 확인 전'}</span></div>
       <div ref={mountRef} className="kine-canvas" />
       {!ready && !error && <div className="kine-loading" role="status">3D 모델을 준비하고 있습니다…</div>}
       {error && <div className="kine-error" role="alert"><p>{error}</p><button onClick={() => window.location.reload()}>새로고침</button></div>}
       <div className="kine-zoom"><button aria-label="3D 확대" disabled={!ready || !!error} onClick={() => apiRef.current?.zoom(.87)}>＋</button><button aria-label="3D 축소" disabled={!ready || !!error} onClick={() => apiRef.current?.zoom(1.15)}>−</button></div>
       <div className="kine-stage-caption"><span>드래그 회전 · 휠/핀치 확대 · 키 클릭 선택</span><b>{props.plate} / {props.rotation}°</b></div>
       {part && <aside className="kine-part-info" aria-live="polite"><button className="kine-info-close" aria-label="부품 안내 닫기" onClick={() => setPart(null)}>×</button><strong>{parts[part].title}</strong><p>{parts[part].copy}</p>{part === 'usb' && <p>{props.connected ? '설정 사이트가 장치 응답을 확인해 케이블을 표시합니다. 연결을 해제하면 사라집니다.' : '케이블을 꽂은 뒤 사이트의 「장치 연결」을 완료하면 모형에도 표시됩니다. LED 예시 선택과는 별개입니다.'}</p>}{part === 'power' && <button className="kine-power" aria-pressed={powerOn} onClick={() => setPowerOn(value => !value)}>모형 스위치 {powerOn ? 'ON' : 'OFF'}</button>}</aside>}
+    </div>
+    <div className="kine-studio-controls" aria-label="제품 시연 조명">
+      <div className="kine-light-modes"><button aria-pressed={!stage.cinematic} onClick={() => setStage(value => ({ ...value, cinematic: false }))}>스튜디오</button><button aria-pressed={stage.cinematic} onClick={() => setStage(value => ({ ...value, cinematic: true }))}>시네마틱</button></div>
+      <label><input type="checkbox" checked={stage.floating} onChange={event => setStage(value => ({ ...value, floating: event.target.checked }))}/>부유 연출 <small>입체 보기</small></label>
+      <label><input type="checkbox" checked={stage.shadows} onChange={event => setStage(value => ({ ...value, shadows: event.target.checked }))}/>바닥 그림자</label>
+      <label className="kine-light-strength">조명 강도<input type="range" aria-label="시연 조명 강도" min="60" max="140" step="5" value={stage.intensity} onChange={event => setStage(value => ({ ...value, intensity: Number(event.target.value) }))}/><output>{stage.intensity}%</output></label>
     </div>
     <div className="kine-options"><div className="kine-finishes" aria-label="모형 케이스 색상"><span>케이스</span>{([['silver', '실버'], ['gray', '그레이'], ['black', '블랙']] as [Finish, string][]).map(([id, name]) => <button key={id} aria-label={name} title={name} aria-pressed={finish === id} onClick={() => setFinish(id)}><i className={`finish-${id}`} /></button>)}</div><label><input type="checkbox" checked={labels} onChange={e => setLabels(e.target.checked)} />키 이름</label><label><input type="checkbox" checked={spinning} disabled={!ready || !!error} onChange={e => { setSpinning(e.target.checked); apiRef.current?.spin(e.target.checked); }} />자동 회전</label></div>
     <div className="kine-part-links" aria-label="부품 살펴보기"><button onClick={() => { selectView('bottom'); setPart('power'); }}>전원 스위치</button><button onClick={() => { selectView('ports'); setPart('usb'); }}>USB-C</button><button onClick={() => { selectView('top'); setPart('antenna'); }}>안테나</button><button onClick={() => { selectView('leds'); setPart('leds'); }}>표시등</button></div>
