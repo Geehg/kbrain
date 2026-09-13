@@ -1,3 +1,5 @@
+import type { LedSignal } from './kine-led';
+
 // Camera targets use the same millimetre coordinates as the physical model.
 // Interpolate angles, not Cartesian positions, so the camera orbits outside
 // the case when travelling from the top to the underside.
@@ -14,6 +16,22 @@ export const TOUR_SHOTS: readonly Shot[] = [
 ];
 export const TOUR_SHOT_SECONDS = 8;
 export const TOUR_DURATION = TOUR_SHOTS.length * TOUR_SHOT_SECONDS;
+// Screen-only art direction, deliberately independent of device telemetry and
+// saved LED preferences. A separate pair accompanies each camera chapter.
+const TOUR_LED_PAIRS: readonly [LedSignal, LedSignal][] = [
+  [{ color: '#eff8ff', pattern: 'steady' }, { color: '#00ddd0', pattern: 'spectrum' }],
+  [{ color: '#168cff', pattern: 'breathe' }, { color: '#9959ff', pattern: 'breathe' }],
+  [{ color: '#ffb13c', pattern: 'steady' }, { color: '#12d5ca', pattern: 'breathe' }],
+  [{ color: '#eff8ff', pattern: 'steady' }, { color: '#00ddd0', pattern: 'spectrum' }],
+  [{ color: '#18d96f', pattern: 'breathe' }, { color: '#268bff', pattern: 'breathe' }],
+  [{ color: '#ff7140', pattern: 'warning' }, { color: '#eff8ff', pattern: 'steady' }],
+  [{ color: '#9959ff', pattern: 'breathe' }, { color: '#268bff', pattern: 'steady' }],
+  [{ color: '#12d5ca', pattern: 'steady' }, { color: '#00ddd0', pattern: 'spectrum' }],
+];
+export function sampleKineTourLeds(seconds: number) {
+  const time = ((seconds % TOUR_DURATION) + TOUR_DURATION) % TOUR_DURATION;
+  return TOUR_LED_PAIRS[Math.floor(time / TOUR_SHOT_SECONDS)];
+}
 export function sampleKineTour(seconds: number, aspect: number) {
   const time = ((seconds % TOUR_DURATION) + TOUR_DURATION) % TOUR_DURATION;
   const index = Math.floor(time / TOUR_SHOT_SECONDS);

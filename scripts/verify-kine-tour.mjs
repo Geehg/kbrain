@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
-import { sampleKineTour, TOUR_DURATION, TOUR_SHOTS } from '../app/kine-tour.ts';
+import { sampleKineTour, sampleKineTourLeds, TOUR_DURATION, TOUR_SHOTS } from '../app/kine-tour.ts';
+const colors = new Set();
+for (let t = 0; t < TOUR_DURATION; t++) {
+  const signals = sampleKineTourLeds(t);
+  assert.equal(signals.length, 2);
+  for (const signal of signals) { assert.notEqual(signal.pattern, 'off'); colors.add(signal.color); }
+  assert.deepEqual(signals, sampleKineTourLeds(t + TOUR_DURATION));
+}
+assert(colors.size >= 6);
 for (const aspect of [.45, 1, 1.8, 2.5]) {
   for (let t = 0; t < TOUR_DURATION * 2; t += .1) {
     const shot = sampleKineTour(t, aspect);

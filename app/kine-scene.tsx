@@ -6,7 +6,7 @@ import type { Finish, ModelKey, ModelPart } from './kine-model';
 import KineLedControls from './kine-led-controls';
 import { DEFAULT_LED_SETTINGS, ledColor, ledLevel, resolveKineLeds, type LedSettings } from './kine-led';
 import './kine-scene.css';
-import { sampleKineTour, TOUR_SHOTS } from './kine-tour';
+import { sampleKineTour, sampleKineTourLeds, TOUR_SHOTS } from './kine-tour';
 
 type View = 'perspective' | 'top' | 'bottom' | 'left' | 'right' | 'ports' | 'leds';
 type StageSettings = { cinematic: boolean; floating: boolean; shadows: boolean; intensity: number };
@@ -150,7 +150,7 @@ export default function KineScene(props: Props) {
       const tourStartPosition = new THREE.Vector3(), tourStartFocus = new THREE.Vector3();
       const tourPosition = new THREE.Vector3(), tourFocus = new THREE.Vector3();
       const tourSpherical = new THREE.Spherical();
-      const stopTour = () => { tourActive = false; setTouring(false); };
+      const stopTour = () => { tourActive = false; setTouring(false); wake(); };
       let labelsVisible = true;
       let currentLedSettings = ledSettingsRef.current;
       let currentLeds = resolveKineLeds(currentLedSettings, propsRef.current.connected);
@@ -171,8 +171,8 @@ export default function KineScene(props: Props) {
         for (const key of model.keyMeshes) {
           key.label.rotation.set(-Math.PI / 2, 0, p.rotation * Math.PI / 180);
           key.label.scale.x = (p.rotation === 90 || p.rotation === 270) ? key.label.userData.landscapeWidth / key.label.userData.portraitWidth : 1;
-          key.label.visible = showLabels;
-          key.ring.visible = key.id === p.selectedId || p.pressed.has(key.matrix) || p.tested.has(key.matrix);
+          key.label.visible = showLabels && !tourActive;
+          key.ring.visible = !tourActive && (key.id === p.selectedId || p.pressed.has(key.matrix) || p.tested.has(key.matrix));
           (key.ring.material as InstanceType<typeof THREE.MeshBasicMaterial>).color.set(p.pressed.has(key.matrix) ? '#84e8ff' : key.id === p.selectedId ? '#c8f135' : '#7ba66f');
         }
         updateLeds(); wake();
@@ -307,20 +307,28 @@ export default function KineScene(props: Props) {
           if (camera.position.distanceTo(targetPosition) < .05) { camera.position.copy(targetPosition); transition = false; }
         }
         const p = propsRef.current;
-        const freezeLeds = reduced.matches || currentLedSettings.paused;
+        const freezeLeds = reduced.matches || (!tourActive && currentLedSettings.paused);
+        const ledSignals = tourActive ? sampleKineTourLeds(Math.max(0, tourElapsed - 2)) : currentLeds.signals;
+        const ledTime = tourActive ? tourElapsed * 1000 : now - ledEpoch;
+        const ledBrightness = tourActive ? DEFAULT_LED_SETTINGS.brightness : currentLedSettings.brightness;
+        const ledSpill = tourActive || currentLedSettings.spill;
         for (let i = 0; i < 2; i++) {
-          const signal = currentLeds.signals[i], level = ledLevel(signal, now - ledEpoch, freezeLeds);
-          const color = new THREE.Color(ledColor(signal, now - ledEpoch, freezeLeds)).offsetHSL(0, -.08, 0);
-          const strength = level * Math.max(0, Math.min(100, currentLedSettings.brightness)) / 100;
+          const signal = ledSignals[i];
+          const elapsed = ledTime + (tourActive ? i * 1200 : 0);
+          const level = ledLevel(signal, elapsed, freezeLeds);
+          const color = new THREE.Color(ledColor(signal, elapsed, freezeLeds)).offsetHSL(0, -.08, 0);
+          const strength = level * Math.max(0, Math.min(100, ledBrightness)) / 100;
           const material = model.ledMaterials[i];
           material.color.set(i ? '#c5cac7' : '#51585a').lerp(new THREE.Color(color), strength * .8);
           material.emissive.set(color); material.emissiveIntensity = strength * 1.8;
           model.ledCores[i].material.color.set(color); model.ledCores[i].material.opacity = strength * .84;
-          model.ledLights[i].color.set(color); model.ledLights[i].intensity = currentLedSettings.spill ? strength * 45 : 0;
-          model.ledHalos[i].material.color.set(color); model.ledHalos[i].material.opacity = currentLedSettings.spill ? strength * .78 : 0;
+          model.ledLights[i].color.set(color); model.ledLights[i].intensity = ledSpill ? strength * 45 : 0;
+          model.ledHalos[i].material.color.set(color); model.ledHalos[i].material.opacity = ledSpill ? strength * .78 : 0;
           if (!freezeLeds && signal.pattern !== 'off' && signal.pattern !== 'steady') animating = true;
         }
         for (const key of model.keyMeshes) {
+          key.label.visible = !tourActive && labelsVisible;
+          key.ring.visible = !tourActive && (key.id === p.selectedId || p.pressed.has(key.matrix) || p.tested.has(key.matrix));
           const pressed = p.pressed.has(key.matrix) || (virtualPress === key.id && now < pressUntil);
           const destination = pressed ? -1.5 : 0;
           if (Math.abs(key.group.position.y - destination) > .005) { key.group.position.y = reduced.matches ? destination : THREE.MathUtils.lerp(key.group.position.y, destination, .35); animating = true; }
@@ -413,7 +421,7 @@ export default function KineScene(props: Props) {
     <div className="kine-tour-bar">
       <div><span>{touring ? `HIGHLIGHT ${String(tourShot + 1).padStart(2, '0')} / ${TOUR_SHOTS.length}` : 'PRODUCT HIGHLIGHTS'}</span><strong>{touring ? TOUR_SHOTS[tourShot].title : '직접 조작 모드'}</strong></div>
       <button data-tour-control disabled={!ready || !!error || motionReduced} onClick={() => apiRef.current?.tour(!touring)}>{touring ? '시연 일시정지' : '시연 다시 재생'}</button>
-      <small>{motionReduced ? '동작 줄이기 설정으로 자동 시연이 꺼져 있습니다.' : touring ? '부위별로 반복 시연합니다. 조작하면 즉시 멈춥니다.' : '회전·확대·키 선택을 자유롭게 사용할 수 있습니다.'}</small>
+      <small>{motionReduced ? '동작 줄이기 설정으로 자동 시연이 꺼져 있습니다.' : touring ? '라벨 숨김 · LED는 화면용 색상 연출입니다. 조작하면 멈추고 기존 설정으로 돌아갑니다.' : '회전·확대·키 선택을 자유롭게 사용할 수 있습니다.'}</small>
     </div>
     <div className="kine-studio-controls" aria-label="제품 시연 조명">
       <div className="kine-light-modes"><button aria-pressed={!stage.cinematic} onClick={() => setStage(value => ({ ...value, cinematic: false }))}>스튜디오</button><button aria-pressed={stage.cinematic} onClick={() => setStage(value => ({ ...value, cinematic: true }))}>시네마틱</button></div>
